@@ -9,7 +9,7 @@
 Parses and filter an mlocate database.
 
 Filter directories which contain an entry matching some of the given regexps
->>> args = arg_parser().parse_args('-d /tmp/MyBook.db -M 10 .*\.ini'.split())
+>>> args = arg_parser().parse_args('-d /tmp/MyBook.db -I 10 .*\.ini'.split())
 >>> run(args)
 * 2013-08-16 17:03:59.956254 /run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001
     - desktop.ini
@@ -41,8 +41,9 @@ def arg_parser():
 
     This doesn't work: >>> parser.parse_args(['--help'])
     >>> parser.print_help()
-    usage: docrunner.py [-h] [-L LOG_LEVEL] [-C] [-d DATABASE] [-M LIMIT_INPUT]
-                        [-m LIMIT_OUTPUT] [-a {test,count,list,json}]
+    usage: docrunner.py [-h] [-L LOG_LEVEL] [-C] [-d DATABASE]
+                        [-I LIMIT_INPUT_DIRS] [-M LIMIT_OUTPUT_DIRS]
+                        [-m LIMIT_OUTPUT_MATCH] [-a {test,count,list,json}]
                         [regexps [regexps ...]]
     <BLANKLINE>
     Lookup items in mlocate database
@@ -56,9 +57,11 @@ def arg_parser():
       -C, --show-config     Dry run, only show current configuration
       -d DATABASE, --database DATABASE
                             name of the mlocate database
-      -M LIMIT_INPUT, --limit-input LIMIT_INPUT
+      -I LIMIT_INPUT_DIRS, --limit-input-dirs LIMIT_INPUT_DIRS
                             Maximum directory entries read from db
-      -m LIMIT_OUTPUT, --limit-output LIMIT_OUTPUT
+      -M LIMIT_OUTPUT_DIRS, --limit-output-dirs LIMIT_OUTPUT_DIRS
+                            Maximum count of selected directories
+      -m LIMIT_OUTPUT_MATCH, --limit-output-match LIMIT_OUTPUT_MATCH
                             Maximum count of selected directories
       -a {test,count,list,json}, --action {test,count,list,json}
                             what to do with matched directories
@@ -70,8 +73,9 @@ def arg_parser():
     parser.add_argument('-L', '--log-level', default='WARNING')
     parser.add_argument('-C', '--show-config', action='store_true', help="Dry run, only show current configuration")
     parser.add_argument('-d', '--database', help="name of the mlocate database", default=MLOCATE_DEFAULT_DB)
-    parser.add_argument('-M', '--limit-input', help="Maximum directory entries read from db", type=int, default=-1)
-    parser.add_argument('-m', '--limit-output', help="Maximum count of selected directories", type=int, default=-1)
+    parser.add_argument('-I', '--limit-input-dirs', help="Maximum directory entries read from db", type=int, default=0)
+    parser.add_argument('-M', '--limit-output-dirs', help="Maximum count of selected directories", type=int, default=0)
+    parser.add_argument('-m', '--limit-output-match', help="Maximum count of selected directories", type=int, default=0)
     parser.add_argument('-a', '--action', help="what to do with matched directories",
                         choices=['test', 'count', 'list', 'json'],
                         default='list')
@@ -97,19 +101,20 @@ def show_config(args):
     >>> args = arg_parser().parse_args('--show-config'.split())
     >>> args # doctest: +ELLIPSIS
     Namespace(...show_config=True...)
-    >>> run(args)
-    action          : list
-    database        : /var/lib/mlocate/mlocate.db
-    limit_input     : -1
-    limit_output    : -1
-    log_level       : WARNING
-    regexps         : []
-    show_config     : True
+    >>> run(args) # doctest: +NORMALIZE_WHITESPACE
+    action               : list
+    database             : /var/lib/mlocate/mlocate.db
+    limit_input_dirs     : 0
+    limit_output_dirs    : 0
+    limit_output_match   : 0
+    log_level            : WARNING
+    regexps              : []
+    show_config          : True
 
     :param args:
     """
     for k, v in sorted(args.__dict__.items()):
-        print("{0:15} : {1}".format(k, v))
+        print("{0:20} : {1}".format(k, v))
 
 
 def print_dir_test(d, r=True):
@@ -194,27 +199,111 @@ actions = {
 
 def do_filter(mdb, args):
     """
-    >>> args = arg_parser().parse_args('-d /tmp/MyBook.db -M 100 .*\.ini'.split())
+    >>> args = arg_parser().parse_args('-d /tmp/MyBook.db -I 10 .*\\.ini$'.split())
     >>> run(args)
     * 2013-08-16 17:03:59.956254 /run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001
         - desktop.ini
+
+    >>> args = arg_parser().parse_args('-L INFO -d /tmp/MyBook.db -a json -I 100 -M 3 -m 5 .*\\.jpg$'.split())
+    >>> run(args) # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    [
+    {
+      "dt": "2013-08-16 17:37:18.885441",
+      "matches": [
+        [ 0, "1823661_calendrierscolaire.jpg" ],
+        [ 0, "517-OF-25.02.121-b.jpg" ],
+        [ 0, "6760135001_14c59a1490_o.jpg" ],
+        [ 0, "Affiche26-02.jpg" ],
+        [ 0, "Dejeuner-canotiers.jpg" ]
+      ],
+      "name": "/run/media/mich/MyBook/Downloads"
+    }
+    ,
+    {
+      "dt": "2012-10-12 13:52:42.634545",
+      "matches": [
+        [ 0, "17634466_q.jpg" ],
+        [ 0, "31140656_q.jpg" ],
+        [ 0, "312002.jpg" ],
+        [ 0, "40647860_q.jpg" ],
+        [ 0, "53683208_q.jpg" ]
+      ],
+      "name": "/run/media/mich/MyBook/Downloads/Comment la Gr..."
+     }
+    ,
+    {
+      "dt": "2012-10-12 13:52:42.713111",
+      "matches": [
+        [ 0, "110831202339112_42_000_apx_470_.jpg" ],
+        [ 0, "110831202401729_44_000_apx_470_.jpg" ],
+        [ 0, "110831202504820_47_000_apx_470_.jpg" ]
+      ],
+      "name": "/run/media/mich/MyBook/Downloads/OpenHydro"
+    }
+    ]
+
+    ...
+
+
+
+
+
+    [
+      {
+        "dt": "2013-08-16 17:37:18.885441",
+        "matches": [
+          [ 0, "1823661_calendrierscolaire.jpg" ],
+          [ 0, "517-OF-25.02.121-b.jpg" ],
+          [ 0, "6760135001_14c59a1490_o.jpg" ],
+          [ 0, "Affiche26-02.jpg" ],
+          [ 0, "Dejeuner-canotiers.jpg" ]
+        ],
+        "name": "/run/media/mich/MyBook/Downloads"
+      },
+    ...
+
+      {
+        "dt": "2012-10-12 13:52:42.634545",
+        "matches": [
+          [ 0, "17634466_q.jpg" ],
+          [ 0, "31140656_q.jpg" ],
+          [ 0, "312002.jpg" ],
+          [ 0, "40647860_q.jpg" ],
+          [ 0, "53683208_q.jpg" ]
+        ],
+        "name": "/run/media/mich/MyBook/Downloads/Comment la Grèce et l'Irlande se font dépouiller au nom de la rigueur budgétaire - donde vamos_files"
+      },
+      {
+        "dt": "2012-10-12 13:52:42.713111",
+        "matches": [
+          [ 0, "110831202339112_42_000_apx_470_.jpg" ],
+          [ 0, "110831202401729_44_000_apx_470_.jpg" ],
+          [ 0, "110831202504820_47_000_apx_470_.jpg" ]
+        ],
+        "name": "/run/media/mich/MyBook/Downloads/OpenHydro"
+      }
+    ]
+
 
     :param mdb:
     :param args:
     :return:
     """
     selectors = [re.compile(r) for r in args.regexps]
-    count = args.limit_output
-    for d in mdb.load_dirs(args.limit_input):
-        r = match_dir(d, selectors, args.action)
+    count = 0
+    if args.action == 'json': print("[")
+    for d in mdb.load_dirs(args.limit_input_dirs):
+        r = match_dir(d, selectors, action=args.action, limit=args.limit_output_match)
         if r:
+            if count and args.action == 'json': print(",")
             actions[args.action](d, r)
-            count -= 1
-            if count <= 0:
+            count += 1
+            if count >= args.limit_output_dirs:
                 break
+    if args.action == 'json': print("]")
 
 
-def match_dir(d, selectors, action='test'):
+def match_dir(d, selectors, action='test', limit=0):
     """
     Tests a directory
     :param action:
@@ -222,23 +311,22 @@ def match_dir(d, selectors, action='test'):
     :param selectors:
     :return:
     """
-    count = 0
+    # logger.info("match_dir(%s,%s,%r,%r)" % (d['name'], selectors, action, limit))
     rslts = []
     for f in d['contents']:
         for s in selectors:
             if s.match(f[1]):
                 if action == 'test':
-                    return True
-                elif action == 'count':
-                    count += 1
-                elif action == 'list':
-                    rslts.append(f)
+                    return True # similar to limit=1
+                if (limit and limit <= len(rslts)):
+                    break
+                rslts.append(f)
 
     if action == 'test':
         return False
     if action == 'count':
-        return count
-    elif action == 'list':
+        return len(rslts)
+    elif action in ('list', 'json'):
         return rslts
     else:
         raise Exception('Unknown action: ', action)

@@ -9,6 +9,7 @@ import logging
 import struct
 import datetime
 import json
+import sys
 
 logger = logging.getLogger()
 logger.setLevel('INFO')
@@ -127,11 +128,11 @@ class MLocateDB:
         # assert(len(grp)==0)
         self.tell()
 
-    def load_dirs(self, limit=-1):
+    def load_dirs(self, limit=0):
         """
         Generator for directory elements.
 
-        :param limit: int maximum count of directories, -1 for unlimited (default)
+        :param limit: int maximum count of directories, 0 for unlimited (default)
         :return: each yielded element is a dictionary of
                   'name': the full path of the directory,
                   'dt': the directory's modification time,
@@ -159,6 +160,9 @@ class MLocateDB:
           "name": "/run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001"
         }
         """
+        if (limit==0):
+            limit = sys.maxsize
+
         while limit != 0:
             limit -= 1
             # header
