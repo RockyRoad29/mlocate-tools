@@ -50,17 +50,17 @@ class MLocateDB:
     ...     if i >= 3:
     ...         break
     0 {
-      "contents": [ [ 1, "$RECYCLE.BIN" ], ... [ 1, "media" ] ],
+      "contents": [ [ true, "$RECYCLE.BIN" ], ... [ true, "media" ] ],
       "dt": "2013-08-20 01:55:07.653616",
       "name": "/run/media/mich/MyBook"
     }
     1 {
-      "contents": [ [  1, "S-1-5-21-1696441804-2191777423-1598828944-1001" ] ],
+      "contents": [ [  true, "S-1-5-21-1696441804-2191777423-1598828944-1001" ] ],
       "dt": "2013-08-16 17:03:59.550653",
       "name": "/run/media/mich/MyBook/$RECYCLE.BIN"
     }
     2 {
-      "contents": [ [ 0, "desktop.ini" ] ],
+      "contents": [ [  false, "desktop.ini" ] ],
       "dt": "2013-08-16 17:03:59.956254",
       "name": "/run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001"
     }
@@ -145,17 +145,17 @@ class MLocateDB:
         >>> for d in mdb.load_dirs(3): # doctest: +ELLIPSIS,+NORMALIZE_WHITESPACE
         ...     print (json.dumps(d,indent=2,sort_keys=True, default=str))
         {
-          "contents": [ [ 1, "$RECYCLE.BIN" ], ... [ 1, "media" ] ],
+          "contents": [ [ true, "$RECYCLE.BIN" ], ... [ true, "media" ] ],
           "dt": "2013-08-20 01:55:07.653616",
           "name": "/run/media/mich/MyBook"
         }
         {
-          "contents": [ [  1, "S-1-5-21-1696441804-2191777423-1598828944-1001" ] ],
+          "contents": [ [  true, "S-1-5-21-1696441804-2191777423-1598828944-1001" ] ],
           "dt": "2013-08-16 17:03:59.550653",
           "name": "/run/media/mich/MyBook/$RECYCLE.BIN"
         }
         {
-          "contents": [ [ 0, "desktop.ini" ] ],
+          "contents": [ [  false, "desktop.ini" ] ],
           "dt": "2013-08-16 17:03:59.956254",
           "name": "/run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001"
         }
@@ -187,4 +187,4 @@ class MLocateDB:
             return None  # end of directory contents
         name = read_cstring(self.db)
         # print (flag, name)
-        return int(flag), name
+        return bool(flag), name

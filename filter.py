@@ -210,11 +210,11 @@ def do_filter(mdb, args):
     {
       "dt": "2013-08-16 17:37:18.885441",
       "matches": [
-        [ 0, "1823661_calendrierscolaire.jpg" ],
-        [ 0, "517-OF-25.02.121-b.jpg" ],
-        [ 0, "6760135001_14c59a1490_o.jpg" ],
-        [ 0, "Affiche26-02.jpg" ],
-        [ 0, "Dejeuner-canotiers.jpg" ]
+        [  false, "1823661_calendrierscolaire.jpg" ],
+        [  false, "517-OF-25.02.121-b.jpg" ],
+        [  false, "6760135001_14c59a1490_o.jpg" ],
+        [  false, "Affiche26-02.jpg" ],
+        [  false, "Dejeuner-canotiers.jpg" ]
       ],
       "name": "/run/media/mich/MyBook/Downloads"
     }
@@ -222,11 +222,11 @@ def do_filter(mdb, args):
     {
       "dt": "2012-10-12 13:52:42.634545",
       "matches": [
-        [ 0, "17634466_q.jpg" ],
-        [ 0, "31140656_q.jpg" ],
-        [ 0, "312002.jpg" ],
-        [ 0, "40647860_q.jpg" ],
-        [ 0, "53683208_q.jpg" ]
+        [  false, "17634466_q.jpg" ],
+        [  false, "31140656_q.jpg" ],
+        [  false, "312002.jpg" ],
+        [  false, "40647860_q.jpg" ],
+        [  false, "53683208_q.jpg" ]
       ],
       "name": "/run/media/mich/MyBook/Downloads/Comment la Gr..."
      }
@@ -234,54 +234,12 @@ def do_filter(mdb, args):
     {
       "dt": "2012-10-12 13:52:42.713111",
       "matches": [
-        [ 0, "110831202339112_42_000_apx_470_.jpg" ],
-        [ 0, "110831202401729_44_000_apx_470_.jpg" ],
-        [ 0, "110831202504820_47_000_apx_470_.jpg" ]
+        [  false, "110831202339112_42_000_apx_470_.jpg" ],
+        [  false, "110831202401729_44_000_apx_470_.jpg" ],
+        [  false, "110831202504820_47_000_apx_470_.jpg" ]
       ],
       "name": "/run/media/mich/MyBook/Downloads/OpenHydro"
     }
-    ]
-
-    ...
-
-
-
-
-
-    [
-      {
-        "dt": "2013-08-16 17:37:18.885441",
-        "matches": [
-          [ 0, "1823661_calendrierscolaire.jpg" ],
-          [ 0, "517-OF-25.02.121-b.jpg" ],
-          [ 0, "6760135001_14c59a1490_o.jpg" ],
-          [ 0, "Affiche26-02.jpg" ],
-          [ 0, "Dejeuner-canotiers.jpg" ]
-        ],
-        "name": "/run/media/mich/MyBook/Downloads"
-      },
-    ...
-
-      {
-        "dt": "2012-10-12 13:52:42.634545",
-        "matches": [
-          [ 0, "17634466_q.jpg" ],
-          [ 0, "31140656_q.jpg" ],
-          [ 0, "312002.jpg" ],
-          [ 0, "40647860_q.jpg" ],
-          [ 0, "53683208_q.jpg" ]
-        ],
-        "name": "/run/media/mich/MyBook/Downloads/Comment la Grèce et l'Irlande se font dépouiller au nom de la rigueur budgétaire - donde vamos_files"
-      },
-      {
-        "dt": "2012-10-12 13:52:42.713111",
-        "matches": [
-          [ 0, "110831202339112_42_000_apx_470_.jpg" ],
-          [ 0, "110831202401729_44_000_apx_470_.jpg" ],
-          [ 0, "110831202504820_47_000_apx_470_.jpg" ]
-        ],
-        "name": "/run/media/mich/MyBook/Downloads/OpenHydro"
-      }
     ]
 
 
