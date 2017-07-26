@@ -28,35 +28,38 @@ class DirStack:
     >>> ds = DirStack()
     >>> ds.select("/a/b/c")
     ['', 'a', 'b', 'c']
-    >>> ds.sum_contents(['some', 'file', 'and', 'dir', 'from', 'contents'])
+    >>> ds.sum_contents([(0, 'some'), (0, 'file'), (0, 'and'), (1, 'dir'), (0, 'from'), (0, 'contents')])
     ... # doctest: +NORMALIZE_WHITESPACE
-    ['c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b',
-     'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b',
-     'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b',
-     'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b']
+    ['ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
+     'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
+     'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
+     'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e']
     >>> ck = ds.get_checksum(-1); ck
-    'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b'
+    'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e'
     >>> ds.select("/a/b/e")
     ['', 'a', 'b', 'e']
-    >>> ds.sum_contents(['some', 'other', 'contents'])
+    >>> ds.sum_contents([(0, 'some'), (1, 'other'), (0, 'contents')])
     ... # doctest: +NORMALIZE_WHITESPACE
-    ['dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88',
-     'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88',
-     'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88',
-     'b79eadf1379aa3320833857715bc721291b823506accb4a4f8b86f7cdb71c4a1']
+    ['65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
+     '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
+     '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
+     'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f']
     >>> ds.get_checksum(2) != ds.get_checksum(3)
     True
     >>> ds.entries()
     ... # doctest: +NORMALIZE_WHITESPACE
-        [('',  'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88'),
-         ('a', 'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88'),
-         ('b', 'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88'),
-         ('e', 'b79eadf1379aa3320833857715bc721291b823506accb4a4f8b86f7cdb71c4a1')]
+    [('', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
+     ('a', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
+     ('b', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
+     ('e', 'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f')]
 
 
     """
-    def __init__(self):
+    EMPTY_DIR_CK = hashlib.sha256(b'[]')
+
+    def __init__(self, on_pop=None):
         self.stack = []
+        self.on_pop = on_pop
 
     def dir_names(self):
         """
@@ -102,18 +105,23 @@ class DirStack:
         >>> ds.pushx(["a", "b","c","d"])
         ['a', 'b', 'c', 'd']
         >>> ds.pop() # doctest: +ELLIPSIS
-        ('d', <sha256 HASH object @ 0x...>)
+        ('d', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
         >>> ds.popx(2)
         ['a']
 
         """
         logger.debug("pop(): %r - %r", self.stack[-1][0], self.stack[-1][1].hexdigest())
-        return self.stack.pop()
+        dpath = os.sep.join(self.dir_names())
+        name, h = self.stack.pop()
+        ck = h.hexdigest()
+        if self.on_pop:
+            self.on_pop(dpath, ck)
+        return (name, ck)
 
     def popx(self, n):
         """
         Pops several directories at once.
-        
+
         >>> ds = DirStack()
         >>> ds.pushx(["a", "b","c","d"])
         ['a', 'b', 'c', 'd']
@@ -136,30 +144,30 @@ class DirStack:
         >>> ds = DirStack()
         >>> ds.select("/a/b/c")
         ['', 'a', 'b', 'c']
-        >>> ds.sum_contents(['some', 'file', 'and', 'dir', 'from', 'contents'])
+        >>> ds.sum_contents([(0, 'some'), (0, 'file'), (0, 'and'), (1, 'dir'), (0, 'from'), (0, 'contents')])
         ... # doctest: +NORMALIZE_WHITESPACE
-        ['c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b',
-        'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b',
-        'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b',
-        'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b']
+        ['ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
+         'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
+         'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
+         'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e']
         >>> ck = ds.get_checksum(-1); ck
-        'c2f61950de5d7032353a4cfff12974f56a1f2934e4bd337cb8ebf6aa316f0e2b'
+        'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e'
         >>> ds.select("/a/b/e")
         ['', 'a', 'b', 'e']
-        >>> ds.sum_contents(['some', 'other', 'contents'])
+        >>> ds.sum_contents([(0, 'some'), (1, 'other'), (0, 'contents')])
         ... # doctest: +NORMALIZE_WHITESPACE
-        ['dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88',
-         'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88',
-         'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88',
-         'b79eadf1379aa3320833857715bc721291b823506accb4a4f8b86f7cdb71c4a1']
+        ['65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
+         '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
+         '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
+         'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f']
         >>> ds.get_checksum(2) != ds.get_checksum(3)
         True
         >>> ds.entries()
         ... # doctest: +NORMALIZE_WHITESPACE
-            [('',  'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88'),
-             ('a', 'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88'),
-             ('b', 'dfda7c2df11412473dfb84b8060b2fd47afd5f42a51b033698ca1a9bf5d6dc88'),
-             ('e', 'b79eadf1379aa3320833857715bc721291b823506accb4a4f8b86f7cdb71c4a1')]
+        [('', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
+         ('a', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
+         ('b', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
+         ('e', 'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f')]
 
         """
         logger.info("select(%r)", dirpath)
@@ -180,7 +188,8 @@ class DirStack:
 
     def sum_contents(self, contents, encoding='utf_8'):
         # Separate entries with "\0", dirs with "\n
-        chunk = ("\0".join(contents) + "\n").encode(encoding)
+        # chunk = ("\0".join(contents) + "\n").encode(encoding)
+        chunk = repr(contents).encode(encoding)
         logger.debug("sum_contents(%r)", contents)
         r = [] # for tests
         for a, h in self.stack:
@@ -197,6 +206,7 @@ class App:
     """
 
     def __init__(self, args):
+        self.by_ck = {}
         logger.info("App(%r)", args)
         self.args = args
         logger.setLevel(self.args.log_level.upper())
@@ -206,7 +216,7 @@ class App:
         mdb = mlocate.MLocateDB()
         mdb.connect(self.args.database)
 
-        self.ds = DirStack()
+        self.ds = DirStack(self.pop_handler)
 
         for d in mdb.load_dirs(self.args.limit_input_dirs):
             if self.match_dir(d):
@@ -240,7 +250,13 @@ class App:
         logger.info("process_dir(%r)", d)
         #dpath = d['name'].split(os.sep)
         self.ds.select(d['name'])
-        # TODO handle popped directories
+        self.ds.sum_contents(d['contents'])
+
+    def pop_handler(self, dpath, ck):
+        if ck in self.by_ck:
+            self.by_ck[ck].append(dpath)
+        else:
+            self.by_ck[ck] = [dpath]
 
     def report(self):
         """
@@ -248,8 +264,20 @@ class App:
         try to identify highest level of each set.
 
         """
-        # TODO implement reporting
-        pass
+        # TODO Test the restriction to top level
+        print ("Reporting Duplicates ")
+        prev = None
+        for ck, dirs in self.by_ck.items():
+            if ck == DirStack.EMPTY_DIR_CK:
+                continue
+            if len(dirs) > 1:
+                print("* {0} : {1} potential duplicates".format(ck, len(dirs)))
+                for d in dirs:
+                    if prev and (d.startswith(prev + "/")):
+                        # ignore subdir
+                        pass
+                    else:
+                        print("   - ", d)
 
 
 def arg_parser():
@@ -290,4 +318,3 @@ if __name__ == '__main__':
     cli_args = arg_parser().parse_args()
     # print "Would run with", args
     App(cli_args).run()
-

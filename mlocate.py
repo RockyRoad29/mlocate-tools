@@ -24,11 +24,18 @@ def read_cstring(f, coding='utf-8'):
     :return: a string
     """
     buf = b''
-    b = f.read(1)
-    while b != b'\0':
-        buf += b
+    try:
         b = f.read(1)
-    return ''.join(buf.decode(coding))
+        while b != b'\0':
+            buf += b
+            b = f.read(1)
+        return ''.join(buf.decode(coding))
+    # except UnicodeDecodeError as e:
+    except Error as e:
+        # FIXME work with byte arrays, decode late, for printing.
+        #print (e.message)
+        print ("Error Decoding: %r", buf)
+        raise e
 
 
 class MLocateDB:
