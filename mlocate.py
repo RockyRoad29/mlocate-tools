@@ -15,21 +15,42 @@ logger = logging.getLogger()
 logger.setLevel('INFO')
 
 
-def read_cstring(f, coding='utf-8'):
-    """
-    Reads a null-terminated string from a binary file.
+def read_cstring(f):
+    #https://stackoverflow.com/questions/44296354/valueerror-source-code-string-cannot-contain-null-bytes
+    r"""
+    Reads a null-terminated byte sequence from a binary file.
 
-    :param f: opened readable stream (file)
-    :param coding: text encoding
-    :return: a string
+    In order be able to better deal with potential string encoding
+    errors, without altering the real filenames,
+    no assumption is made as this stage about encoding.
+
+    In a utf-8 based system, it may occasionally happen that a filename
+    has a different encoding, or encoded twice.
+
+    OS may replace problematic characters with an interrogation point.
+    Similar behavior may be obtained like this:
+
+    >>> import io
+    >>> s = read_cstring(io.BytesIO(b'3v_laiton_motoris\xe9e.pdf\0\more data'))
+    >>> s
+    b'3v_laiton_motoris\xe9e.pdf'
+    >>> s.decode(errors='replace')
+    '3v_laiton_motoris�e.pdf'
+
+    Another bonus for decoding late is to be able to report the cause of the error in filesystem,
+    the full path of the problematic name.
+
+    :param f: opened readable binary stream (typically a file)
+    :return: a byte array, excluding the final b'\0'
+            You
     """
     buf = b''
     b = f.read(1)
     while b != b'\0':
         buf += b
         b = f.read(1)
-    return ''.join(buf.decode(coding))
-
+    # work with byte arrays, decode late, for printing.
+    return buf
 
 class MLocateDB:
     """
@@ -38,14 +59,14 @@ class MLocateDB:
     >>> mdb = MLocateDB()
     >>> mdb.connect('/tmp/MyBook.db')
     >>> sorted(mdb.header.items())
-    [('conf_block_size', 544), ('file_format', 0), ('req_visibility', 0), ('root', '/run/media/mich/MyBook')]
+    [('conf_block_size', 544), ('file_format', 0), ('req_visibility', 0), ('root', b'/run/media/mich/MyBook')]
     >>> mdb.tell()
     583
     >>> mdb.db.seek(583)
     583
     >>> #[mdb.load_dirs() for i in range(3)]
     >>> for i, d in enumerate(mdb.load_dirs()): # doctest: +ELLIPSIS,+NORMALIZE_WHITESPACE
-    ...     print (i, json.dumps(d,indent=2,sort_keys=True, default=str))
+    ...     print (i, json.dumps(mdb.decode_direntry(d),indent=2,sort_keys=True))
     ...     i += 1
     ...     if i >= 3:
     ...         break
@@ -102,7 +123,7 @@ class MLocateDB:
         data = struct.unpack('>ibbh', self.db.read(8))
         flds = 'conf_block_size, file_format, req_visibility'.split(', ')
         self.header = dict(zip(flds, data[:-1]))  # padding ignored
-        self.header['root'] = read_cstring(self.db, 'utf-8')
+        self.header['root'] = read_cstring(self.db)
         self.tell()
 
     def _read_conf(self):
@@ -143,7 +164,7 @@ class MLocateDB:
         >>> mdb = MLocateDB()
         >>> mdb.connect('/tmp/MyBook.db')
         >>> for d in mdb.load_dirs(3): # doctest: +ELLIPSIS,+NORMALIZE_WHITESPACE
-        ...     print (json.dumps(d,indent=2,sort_keys=True, default=str))
+        ...     print (json.dumps(mdb.decode_direntry(d),indent=2,sort_keys=True))
         {
           "contents": [ [ true, "$RECYCLE.BIN" ], ... [ true, "media" ] ],
           "dt": "2013-08-20 01:55:07.653616",
@@ -187,4 +208,60 @@ class MLocateDB:
             return None  # end of directory contents
         name = read_cstring(self.db)
         # print (flag, name)
+        # TODO return an instance of a dedicated class mlocate.DirEntry
         return bool(flag), name
+
+    @staticmethod
+    def safe_decode(bname, prefix=''):
+        r"""
+        >>> MLocateDB.safe_decode(b'some/messy\xe9ename/in/path')
+        'some/messy\\xe9ename/in/path'
+
+        Check the warning messages triggered below: they should include full path
+        >>> MLocateDB.safe_decode(b'messy\xe9efilename.jpg', "some/regular/path/")
+        'messy\\xe9efilename.jpg'
+        >>> MLocateDB.safe_decode(b'messy\xe9efilename.jpg', "some/messy\xe9ename/in/path/")
+        'messy\\xe9efilename.jpg'
+
+        :rtype : string decoded
+        :param bname:
+        :param prefix:
+        """
+        try:
+            name = bname.decode()
+        except UnicodeDecodeError as e:
+            logger.warning("Error decoding %r: %s", bname, e.reason)
+            name = bname.decode(errors='backslashreplace')
+            logger.warning("Entry parsed as %r", prefix + name)
+        return name
+
+    @staticmethod
+    def decode_direntry(d):
+        r"""
+        Returns a printable and readable equivalent of the given direntry.
+
+          - the byte arrays are decoded, errors are handled
+              - with backslash replacement
+              - and a warning is issued with full path of problematique entry
+          - the datetime is converted to its string representation
+
+        Check the warning messages triggered below: they should include full path
+
+        >>> import datetime
+        >>> d = MLocateDB.decode_direntry(dict(name=b"/some/messy\xe9ename/in/path",
+        ...                               dt=datetime.datetime(2013, 8, 16, 17, 37, 18, 885441),
+        ...                               contents=[(False, b'messy\xe9efilename.jpg'),
+        ...                                         (False, b'110831202504820_47_000_apx_470_.jpg')]))
+        >>> d ==  {'dt': '2013-08-16 17:37:18.885441',
+        ...        'name': '/some/messy\\xe9ename/in/path',
+        ...        'contents': [(False, 'messy\\xe9efilename.jpg'), (False, '110831202504820_47_000_apx_470_.jpg')]}
+        True
+
+        :param d:
+        :return:
+        """
+        dirname=MLocateDB.safe_decode(d['name'])
+        return dict(name=dirname,
+                    dt=str(d['dt']),
+                    contents=[(flag, MLocateDB.safe_decode(f, dirname+"/")) for flag,f in d['contents']]
+        )
