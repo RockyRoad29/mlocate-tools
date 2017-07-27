@@ -15,28 +15,66 @@ logger = logging.getLogger()
 logger.setLevel('INFO')
 
 
-def read_cstring(f, coding='utf-8'):
-    """
-    Reads a null-terminated string from a binary file.
+def read_cstring(f):
+    #https://stackoverflow.com/questions/44296354/valueerror-source-code-string-cannot-contain-null-bytes
+    r"""
+    Reads a null-terminated byte sequence from a binary file.
 
-    :param f: opened readable stream (file)
-    :param coding: text encoding
-    :return: a string
+    In order be able to better deal with potential string encoding
+    errors, without altering the real filenames,
+    no assumption is made as this stage about encoding.
+
+    In a utf-8 based system, it may occasionally happen that a filename
+    has a different encoding, or encoded twice.
+
+    OS may replace problematic characters with an interrogation point.
+    Similar behavior may be obtained like this:
+
+    >>> import io
+    >>> s = read_cstring(io.BytesIO(b'3v_laiton_motoris\xe9e.pdf\0\more data'))
+    >>> s
+    b'3v_laiton_motoris\xe9e.pdf'
+    >>> s.decode(errors='replace')
+    '3v_laiton_motoris�e.pdf'
+
+    Another bonus for decoding late is to be able to report the cause of the error in filesystem,
+    the full path of the problematic name.
+
+    :param f: opened readable binary stream (typically a file)
+    :return: a byte array, excluding the final b'\0'
+            You
     """
     buf = b''
-    try:
+    b = f.read(1)
+    while b != b'\0':
+        buf += b
         b = f.read(1)
-        while b != b'\0':
-            buf += b
-            b = f.read(1)
-        return ''.join(buf.decode(coding))
-    # except UnicodeDecodeError as e:
-    except Error as e:
-        # FIXME work with byte arrays, decode late, for printing.
-        #print (e.message)
-        print ("Error Decoding: %r", buf)
-        raise e
+    # work with byte arrays, decode late, for printing.
+    return buf
 
+
+def safe_decode(bname, prefix=''):
+    r"""
+    >>> safe_decode(b'some/messy\xe9ename/in/path')
+    'some/messy\\xe9ename/in/path'
+
+    Check the warning messages triggered below: they should include full path
+    >>> safe_decode(b'messy\xe9efilename.jpg', "some/regular/path/")
+    'messy\\xe9efilename.jpg'
+    >>> safe_decode(b'messy\xe9efilename.jpg', "some/messy\xe9ename/in/path/")
+    'messy\\xe9efilename.jpg'
+
+    :rtype : string decoded
+    :param bname:
+    :param prefix:
+    """
+    try:
+        name = bname.decode()
+    except UnicodeDecodeError as e:
+        logger.warning("Error decoding %r: %s", bname, e.reason)
+        name = bname.decode(errors='backslashreplace')
+        logger.warning("Entry parsed as %r", prefix + name)
+    return name
 
 class MLocateDB:
     """
@@ -45,14 +83,14 @@ class MLocateDB:
     >>> mdb = MLocateDB()
     >>> mdb.connect('/tmp/MyBook.db')
     >>> sorted(mdb.header.items())
-    [('conf_block_size', 544), ('file_format', 0), ('req_visibility', 0), ('root', '/run/media/mich/MyBook')]
+    [('conf_block_size', 544), ('file_format', 0), ('req_visibility', 0), ('root', b'/run/media/mich/MyBook')]
     >>> mdb.tell()
     583
     >>> mdb.db.seek(583)
     583
     >>> #[mdb.load_dirs() for i in range(3)]
     >>> for i, d in enumerate(mdb.load_dirs()): # doctest: +ELLIPSIS,+NORMALIZE_WHITESPACE
-    ...     print (i, json.dumps(d,indent=2,sort_keys=True, default=str))
+    ...     print (i, json.dumps(d.decode(),indent=2,sort_keys=True))
     ...     i += 1
     ...     if i >= 3:
     ...         break
@@ -109,7 +147,7 @@ class MLocateDB:
         data = struct.unpack('>ibbh', self.db.read(8))
         flds = 'conf_block_size, file_format, req_visibility'.split(', ')
         self.header = dict(zip(flds, data[:-1]))  # padding ignored
-        self.header['root'] = read_cstring(self.db, 'utf-8')
+        self.header['root'] = read_cstring(self.db)
         self.tell()
 
     def _read_conf(self):
@@ -150,7 +188,7 @@ class MLocateDB:
         >>> mdb = MLocateDB()
         >>> mdb.connect('/tmp/MyBook.db')
         >>> for d in mdb.load_dirs(3): # doctest: +ELLIPSIS,+NORMALIZE_WHITESPACE
-        ...     print (json.dumps(d,indent=2,sort_keys=True, default=str))
+        ...     print (json.dumps(d.decode(),indent=2,sort_keys=True))
         {
           "contents": [ [ true, "$RECYCLE.BIN" ], ... [ true, "media" ] ],
           "dt": "2013-08-20 01:55:07.653616",
@@ -180,12 +218,12 @@ class MLocateDB:
 
             # directory details
             dir_seconds, dir_nanos, padding = struct.unpack('>qli', buf)
-            yield {
-                'name': read_cstring(self.db),
-                'dt': datetime.datetime.fromtimestamp(dir_seconds).replace(microsecond=round(dir_nanos / 1000)),
-                'contents': [t for t in iter(self._read_direntry, None)]
-                # NOTE generator not wanted for dir entries: data must be read now.
-            }
+            d = DirEntry(bname=read_cstring(self.db),
+                         dt=datetime.datetime.fromtimestamp(dir_seconds).replace(microsecond=round(dir_nanos / 1000)),
+                         contents= [t for t in iter(self._read_direntry, None)]
+            )
+            # NOTE generator not wanted for dir entries: data must be read now.
+            yield d
 
     def _read_direntry(self):
         flag = struct.unpack('b', self.db.read(1))[0]
@@ -195,3 +233,40 @@ class MLocateDB:
         name = read_cstring(self.db)
         # print (flag, name)
         return bool(flag), name
+
+
+class DirEntry:
+    def __init__(self, bname, dt, contents):
+        self.bname = bname
+        self.dt = dt
+        self.contents = contents
+
+    def decode(self):
+        r"""
+        Returns a printable and readable equivalent of the given direntry.
+
+          - the byte arrays are decoded, errors are handled
+              - with backslash replacement
+              - and a warning is issued with full path of problematique entry
+          - the datetime is converted to its string representation
+
+        Check the warning messages triggered below: they should include full path
+
+        >>> import datetime
+        >>> d = DirEntry(bname=b"/some/messy\xe9ename/in/path",
+        ...              dt=datetime.datetime(2013, 8, 16, 17, 37, 18, 885441),
+        ...              contents=[(False, b'messy\xe9efilename.jpg'),
+        ...                        (False, b'110831202504820_47_000_apx_470_.jpg')])
+        >>> d.decode() ==  {
+        ...        'dt': '2013-08-16 17:37:18.885441',
+        ...        'name': '/some/messy\\xe9ename/in/path',
+        ...        'contents': [(False, 'messy\\xe9efilename.jpg'), (False, '110831202504820_47_000_apx_470_.jpg')]}
+        True
+
+        :return:
+        """
+        dirname = safe_decode(self.bname)
+        return dict(name=dirname,
+                    dt=str(self.dt),
+                    contents=[(flag, safe_decode(f, dirname+"/")) for flag,f in self.contents]
+        )
