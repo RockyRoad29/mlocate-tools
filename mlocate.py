@@ -265,8 +265,12 @@ class DirEntry:
 
         :return:
         """
-        dirname = safe_decode(self.bname)
+        dirname = self.name
         return dict(name=dirname,
                     dt=str(self.dt),
                     contents=[(flag, safe_decode(f, dirname+"/")) for flag,f in self.contents]
         )
+
+    @property
+    def name(self):
+        return safe_decode(self.bname)

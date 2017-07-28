@@ -7,6 +7,8 @@
 # ----------------------------------------
 """
 Tries to identify duplicate directory trees, using an mlocate database.
+
+
 """
 import hashlib
 import logging
@@ -14,7 +16,6 @@ import argparse
 import os
 import re
 import mlocate
-import path
 
 MLOCATE_DEFAULT_DB = "/var/lib/mlocate/mlocate.db"
 logging.basicConfig(level='DEBUG')
@@ -26,46 +27,48 @@ class DirStack:
     Maintains a list of contents checksums for each level of ancestor directories.
 
     >>> ds = DirStack()
-    >>> ds.select("/a/b/c")
-    ['', 'a', 'b', 'c']
-    >>> ds.sum_contents([(0, 'some'), (0, 'file'), (0, 'and'), (1, 'dir'), (0, 'from'), (0, 'contents')])
-    ... # doctest: +NORMALIZE_WHITESPACE
-    ['ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
-     'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
-     'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
-     'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e']
-    >>> ck = ds.get_checksum(-1); ck
-    'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e'
-    >>> ds.select("/a/b/e")
-    ['', 'a', 'b', 'e']
-    >>> ds.sum_contents([(0, 'some'), (1, 'other'), (0, 'contents')])
-    ... # doctest: +NORMALIZE_WHITESPACE
-    ['65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
-     '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
-     '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
-     'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f']
-    >>> ds.get_checksum(2) != ds.get_checksum(3)
+    >>> contents1 = [(False, b'some'), (False, b'file'), (False, b'and'), (True, b'dir'), (False, b'from'), (False, b'contents')]
+    >>> contents2 = [(0, 'some'), (1, 'other'), (0, 'contents')]
+
+    >>> ds.select(b"/a/b/c")
+    [b'', b'a', b'b', b'c']
+    >>> DirStack.INITIAL_CK
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    >>> DirStack.EMPTY_DIR_CK
+    '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
+    >>> ds.get_checksum(1) == DirStack.INITIAL_CK
     True
-    >>> ds.entries()
-    ... # doctest: +NORMALIZE_WHITESPACE
-    [('', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
-     ('a', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
-     ('b', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
-     ('e', 'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f')]
+    >>> ds.get_checksums() == [DirStack.INITIAL_CK]*4
+    True
+    >>> ck1 = ds.sum_contents(contents1).hexdigest()
+    >>> ds.get_checksums() == [ck1]*4
+    True
+    >>> ds.select(b"/a/b/e")
+    [b'', b'a', b'b', b'e']
+    >>> ck2 = ds.sum_contents(contents2).hexdigest(); ck2
+    'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f'
+    >>> ck0=ds.get_checksum(0); ck3=ds.get_checksum(3); ck3 != ck0
+    True
+    >>> ds.entries() # doctest: +NORMALIZE_WHITESPACE
+    [(b'',  'dbd445cc0fc3f1ffa5a78a69f16402ace7c7ec95462e20d808cd3ded6c8992f2'),
+     (b'a', 'dbd445cc0fc3f1ffa5a78a69f16402ace7c7ec95462e20d808cd3ded6c8992f2'),
+     (b'b', 'dbd445cc0fc3f1ffa5a78a69f16402ace7c7ec95462e20d808cd3ded6c8992f2'),
+     (b'e', 'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f')]
+    >>> ds.get_checksums() == [ck0]*3 + [ck3]
+    True
 
 
     """
-    EMPTY_DIR_CK = hashlib.sha256(b'[]')
+    INITIAL_CK = hashlib.sha256().hexdigest()
+    EMPTY_DIR_CK = hashlib.sha256(b'[]').hexdigest()
 
     def __init__(self, on_pop=None):
         self.stack = []
         self.on_pop = on_pop
 
-    def dir_names(self):
-        """
-        :return: list of directory names in stack
-        """
-        return [d[0] for d in self.stack]
+    # -------------------------- Stack read access
+    def level(self):
+        return len(self.stack)
 
     def entries(self):
         """
@@ -75,10 +78,30 @@ class DirStack:
         """
         return [(d[0], d[1].hexdigest()) for d in self.stack]
 
+    def dir_names(self):
+        """
+        :return: list of directory names in stack
+        """
+        return [d[0] for d in self.stack]
+
+    def get_checksums(self):
+        return [l[1].hexdigest() for l in self.stack]
+
+    def get_checksum(self, lvl):
+        return self.stack[lvl][1].hexdigest()
+
+    # -------------------------- Basic stack operations
     def push(self, entry):
         """
         Adds an empty subdirectory at the end of the stack,
         with a new cksum.
+
+        >>> ds = DirStack()
+        >>> ds.push(b'a')
+        >>> ds.push(b'b')
+        >>> ds.entries() # doctest: +NORMALIZE_WHITESPACE
+        [(b'a', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'),
+         (b'b', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')]
 
         :param entry:
         """
@@ -86,11 +109,31 @@ class DirStack:
         ck = hashlib.sha256()
         self.stack.append((entry, ck))
 
+    def pop(self):
+        """
+        >>> ds = DirStack()
+        >>> ds.push(b'a')
+        >>> ds.push(b'b')
+        >>> ds.pop() # doctest: +ELLIPSIS
+        (b'b', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
+
+        """
+        logger.debug("pop(): %r - %r", self.stack[-1][0], self.stack[-1][1].hexdigest())
+        dpath = os.sep.encode().join(self.dir_names())
+        name, h = self.stack.pop()
+        ck = h.hexdigest()
+        if self.on_pop:
+            self.on_pop(dpath, ck)
+        return (name, ck)
+
+    # --------------------------------------- Multiple stack operation
     def pushx(self, entries):
         """
         >>> ds = DirStack()
-        >>> ds.pushx(["a", "b","c"])
-        ['a', 'b', 'c']
+        >>> ds.pushx([b'a', b'b', b'c', b'd'])
+        [b'a', b'b', b'c', b'd']
+        >>> ds.pushx([b"e", b"f", b"g"])
+        [b'a', b'b', b'c', b'd', b'e', b'f', b'g']
 
         :param entries: list of directory names, high level first.
         :returns the new list
@@ -99,34 +142,15 @@ class DirStack:
             self.push(e)
         return self.dir_names()
 
-    def pop(self):
-        """
-        >>> ds = DirStack()
-        >>> ds.pushx(["a", "b","c","d"])
-        ['a', 'b', 'c', 'd']
-        >>> ds.pop() # doctest: +ELLIPSIS
-        ('d', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
-        >>> ds.popx(2)
-        ['a']
-
-        """
-        logger.debug("pop(): %r - %r", self.stack[-1][0], self.stack[-1][1].hexdigest())
-        dpath = os.sep.join(self.dir_names())
-        name, h = self.stack.pop()
-        ck = h.hexdigest()
-        if self.on_pop:
-            self.on_pop(dpath, ck)
-        return (name, ck)
-
     def popx(self, n):
         """
         Pops several directories at once.
 
         >>> ds = DirStack()
-        >>> ds.pushx(["a", "b","c","d"])
-        ['a', 'b', 'c', 'd']
+        >>> ds.pushx([b'a', b'b', b'c', b'd'])
+        [b'a', b'b', b'c', b'd']
         >>> ds.popx(2)
-        ['a', 'b']
+        [b'a', b'b']
 
         :param n: number of directory levels to go up
         """
@@ -136,42 +160,17 @@ class DirStack:
 
         return self.dir_names()
 
-    def level(self):
-        return len(self.stack)
-
     def select(self, dirpath):
         """
         >>> ds = DirStack()
-        >>> ds.select("/a/b/c")
-        ['', 'a', 'b', 'c']
-        >>> ds.sum_contents([(0, 'some'), (0, 'file'), (0, 'and'), (1, 'dir'), (0, 'from'), (0, 'contents')])
-        ... # doctest: +NORMALIZE_WHITESPACE
-        ['ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
-         'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
-         'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e',
-         'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e']
-        >>> ck = ds.get_checksum(-1); ck
-        'ae4889154c74294cd83990f3d767e5cdcddc68dbefbda5255c3813201ddf859e'
-        >>> ds.select("/a/b/e")
-        ['', 'a', 'b', 'e']
-        >>> ds.sum_contents([(0, 'some'), (1, 'other'), (0, 'contents')])
-        ... # doctest: +NORMALIZE_WHITESPACE
-        ['65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
-         '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
-         '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10',
-         'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f']
-        >>> ds.get_checksum(2) != ds.get_checksum(3)
-        True
-        >>> ds.entries()
-        ... # doctest: +NORMALIZE_WHITESPACE
-        [('', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
-         ('a', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
-         ('b', '65416eddfded80e9ba9de1c99a3c68e365425df49466e9782fa836af0b933c10'),
-         ('e', 'c3519456f6e17deefa2f84dbd38d95b26dc36a4c68b84728bf73cb2d949b279f')]
 
+        >>> ds.select(b"/a/b/c")
+        [b'', b'a', b'b', b'c']
+        >>> ds.select(b"/a/b/e")
+        [b'', b'a', b'b', b'e']
         """
         logger.info("select(%r)", dirpath)
-        l1 = dirpath.split(os.sep)
+        l1 = dirpath.split(os.sep.encode())
         # find common stem
         lvl=0
         while (lvl<self.level()) and (lvl<len(l1)):
@@ -183,20 +182,15 @@ class DirStack:
         self.pushx(l1[lvl:])
         return self.dir_names()
 
-    def get_checksum(self, lvl):
-        return self.stack[lvl][1].hexdigest()
-
     def sum_contents(self, contents, encoding='utf_8'):
         # Separate entries with "\0", dirs with "\n
         # chunk = ("\0".join(contents) + "\n").encode(encoding)
         chunk = repr(contents).encode(encoding)
         logger.debug("sum_contents(%r)", contents)
-        r = [] # for tests
         for a, h in self.stack:
             h.update(chunk)
             logger.debug("%r: %r", a, h.hexdigest())
-            r.append(h.hexdigest())
-        return r
+        return hashlib.sha256(chunk)
 
 class App:
     """
@@ -213,32 +207,46 @@ class App:
         self.selectors = [re.compile(r) for r in args.dir_selectors]
 
     def run(self):
+        """
+        >> app=App(arg_parser().parse_args("-d /tmp/MyBook.db -I 100 .*[Pp]hotos?/?".split()))
+        >>> app = App(arg_parser().parse_args('-d data/virtualenvs.db /home/mich/\\.virtualenvs/?'.split()))
+        >>> app.run() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+        Reporting Duplicates
+        * ... : ... potential duplicates
+           -  b'/home/mich/.virtualenvs/...'
+           -  b'/home/mich/.virtualenvs/...'
+           - ...
+        * ... : ... potential duplicates
+           -  b'/home/mich/.virtualenvs/...'
+           -  b'/home/mich/.virtualenvs/...'
+           - ...
+        """
         mdb = mlocate.MLocateDB()
         mdb.connect(self.args.database)
 
         self.ds = DirStack(self.pop_handler)
 
         for d in mdb.load_dirs(self.args.limit_input_dirs):
-            if self.match_dir(d):
+            if self.match_path(d.name):
                 self.process_dir(d)
 
         self.report()
 
-    def match_dir(self, d):
+    def match_path(self, name):
         """
-        >>> app = App(arg_parser().parse_args('-L debug -d /tmp/MyBook.db /home/mich/\\.virtualenvs/?'.split()))
         >>> app = App(arg_parser().parse_args(['/home/mich/\\.virtualenvs/?']))
-        >>> app.match_dir(dict(name='/home/mich/.virtualenvs'))
+        >>> app.match_path('/home/mich/.virtualenvs')
         True
-        >>> app.match_dir(dict(name='/home/mich/.virtualenvs/py2/share'))
+        >>> app.match_path('/home/mich/.virtualenvs/py2/share')
         True
 
-        :param d:
+        :param name:
         :return:
         """
-        # logger.debug("match_dir(%r)", d)
+        # TODO Move matching methods to MLocateDB class
+        # logger.debug("match_path(%r)", name)
         for s in self.selectors:
-            if s.match(d['name']):
+            if s.match(name):
                 return True
         return False
 
@@ -249,8 +257,8 @@ class App:
         """
         logger.info("process_dir(%r)", d)
         #dpath = d['name'].split(os.sep)
-        self.ds.select(d['name'])
-        self.ds.sum_contents(d['contents'])
+        self.ds.select(d.bname)
+        self.ds.sum_contents(d.contents)
 
     def pop_handler(self, dpath, ck):
         if ck in self.by_ck:
@@ -301,8 +309,11 @@ def arg_parser():
                             name of the mlocate database
       -I LIMIT_INPUT_DIRS, --limit-input-dirs LIMIT_INPUT_DIRS
                             Maximum directory entries read from db
+    >>> parser.parse_args("-L debug -d /tmp/MyBook.db -I 10 .*[Pp]hotos?/?".split())
+    Namespace(database='/tmp/MyBook.db', dir_selectors=['.*[Pp]hotos?/?'], limit_input_dirs=10, log_level='debug')
 
    """
+    # TODO allow glob expressions (use fnmatch)
     parser = argparse.ArgumentParser()
     parser.description = "Lookup items in mlocate database"
     # parser.add_argument('--verbose', '-v', action='count')
