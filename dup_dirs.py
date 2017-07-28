@@ -68,6 +68,11 @@ class DirStack:
 
     # -------------------------- Stack read access
     def level(self):
+        """
+        Current depth in subdirectories
+
+        :return: int
+        """
         return len(self.stack)
 
     def entries(self):
@@ -85,9 +90,16 @@ class DirStack:
         return [d[0] for d in self.stack]
 
     def get_checksums(self):
+        """
+        :return: list of directory checksums digests
+        """
         return [l[1].hexdigest() for l in self.stack]
 
     def get_checksum(self, lvl):
+        """
+        checksum digest for directory at given depth
+        :return: str
+        """
         return self.stack[lvl][1].hexdigest()
 
     # -------------------------- Basic stack operations
@@ -200,6 +212,7 @@ class App:
     """
 
     def __init__(self, args):
+        self.ds = DirStack(self.pop_handler)
         self.by_ck = {}
         logger.info("App(%r)", args)
         self.args = args
@@ -223,8 +236,6 @@ class App:
         """
         mdb = mlocate.MLocateDB()
         mdb.connect(self.args.database)
-
-        self.ds = DirStack(self.pop_handler)
 
         for d in mdb.load_dirs(self.args.limit_input_dirs):
             if self.match_path(d.name):

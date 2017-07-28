@@ -273,4 +273,28 @@ class DirBlock:
 
     @property
     def name(self):
+        """
+        The directory path as decoded string, using `safe_decode()`
+
+        :return: str
+        """
         return safe_decode(self.bname)
+
+    def match_contents(self, selectors, limit=0):
+        """
+        Filters or test directory entries by regexps
+
+        :param selectors: list of compiled string regexps to apply to dir contents
+        :param limit: maximum count of matched entries to return
+        :return:
+        """
+        # logger.info("match_dir(%s,%s,%r,%r)" % (d['name'], selectors, action, limit))
+        rslts = []
+        for e in self.contents:
+            name = safe_decode(e[1])
+            for s in selectors:
+                if s.match(name):
+                    rslts.append(e)
+                    if (limit and limit <= len(rslts)):
+                        return rslts
+        return rslts

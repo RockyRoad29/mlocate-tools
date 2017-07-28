@@ -125,14 +125,14 @@ def print_dir_test(d, r=True):
 
     >>> from datetime import datetime
     >>> dt = datetime(2017, 7, 20, 13, 22, 43, 817771)
-    >>> print_dir_test(dict(name='/some/directory/test', dt=dt), True)
+    >>> print_dir_test(mlocate.DirBlock(b'/some/directory/test', dt, []), True)
     2017-07-20 13:22:43.817771 /some/directory/test
 
     :param d: dict representing a directory
     :param r: Unused. Present to match action signature
     """
     assert r
-    print("{0} {1}".format(d['dt'], d['name']))
+    print("{0} {1}".format(d.dt, d.name))
 
 
 def print_dir_count(d, r):
@@ -141,13 +141,13 @@ def print_dir_count(d, r):
 
     >>> from datetime import datetime
     >>> dt = datetime(2017, 7, 20, 13, 22, 43, 817771)
-    >>> print_dir_count(dict(name='/some/directory/test', dt=dt), 12)
-    [2017-07-20 13:22:43.817771] 12 matches in /some/directory/test
+    >>> print_dir_count(mlocate.DirBlock(b'/some/directory/test', dt, []), [(True, b'some_dir'), ( False,b'some_file')])
+    [2017-07-20 13:22:43.817771] 2 matches in /some/directory/test
 
     :param d: dict representing a directory
     :param r: the matches count
     """
-    print("[{0}] {2} matches in {1}".format(d['dt'], d['name'], r))
+    print("[{0}] {2} matches in {1}".format(d.dt, d.name, len(r)))
 
 
 def print_dir_list(d, r):
@@ -155,7 +155,7 @@ def print_dir_list(d, r):
     Prints a section showing matches for a single directory
     >>> from datetime import datetime
     >>> dt = datetime(2017, 7, 20, 13, 22, 43, 817771)
-    >>> print_dir_list(dict(name='/some/directory/test', dt=dt), [(1,'some_dir'), (0,'some_file')])
+    >>> print_dir_list(mlocate.DirBlock(b'/some/directory/test', dt, []), [(True, b'some_dir'), ( False,b'some_file')])
     * 2017-07-20 13:22:43.817771 /some/directory/test
         - some_dir/
         - some_file
@@ -163,9 +163,9 @@ def print_dir_list(d, r):
     :param d: dict representing a directory
     :param r: list of matched entries
     """
-    print("* {0} {1}".format(d['dt'], d['name']))
+    print("* {0} {1}".format(d.dt, d.name))
     for f in r:
-        print("    - {0}{1}".format(f[1], ["", "/"][f[0]]))
+        print("    - {0}{1}".format(mlocate.safe_decode(f[1]), ["", "/"][f[0]]))
 
 
 def print_dir_json(d, r):
@@ -173,13 +173,14 @@ def print_dir_json(d, r):
     Prints a section showing matches for a single directory
     >>> from datetime import datetime
     >>> dt = datetime(2017, 7, 20, 13, 22, 43, 817771)
-    >>> print_dir_json(dict(name='/some/directory/test', dt=dt),
-    ...                [(1, 'some_dir'), (0, 'some_file')]) # doctest: +NORMALIZE_WHITESPACE
+    >>> print_dir_json(mlocate.DirBlock(b'/some/directory/test', dt, []),
+    ...                [(True, b'some_dir'), ( False,b'some_file')])
+    ... # doctest: +NORMALIZE_WHITESPACE
     {
       "dt": "2017-07-20 13:22:43.817771",
       "matches": [
-        [ 1, "some_dir" ],
-        [ 0, "some_file" ]
+        [ true, "some_dir" ],
+        [ false, "some_file" ]
       ],
       "name": "/some/directory/test"
     }
@@ -187,8 +188,8 @@ def print_dir_json(d, r):
     :param d: dict representing a directory
     :param r: list of matched entries
     """
-    data = dict(name=d['name'], dt=d['dt'], matches=r)
-    print(json.dumps(data, indent=2, sort_keys=True, default=str))
+    data = dict(name=d.name, dt=str(d.dt), matches=[(flag, mlocate.safe_decode(f)) for flag, f in r])
+    print(json.dumps(data, indent=2, sort_keys=True))
 
 
 actions = {
@@ -252,47 +253,24 @@ def do_filter(mdb, args):
     # compile regexps as bytes patterns
     selectors = [re.compile(r) for r in args.regexps]
     count = 0
+    if args.action == 'test':
+        limit = 1
+    else:
+        limit = args.limit_output_match
     if args.action == 'json': print("[")
+
     for d in mdb.load_dirs(args.limit_input_dirs):
-        d1 = d.decode()
-        r = match_dir_by_contents(d1, selectors, action=args.action, limit=args.limit_output_match)
+        r = d.match_contents(selectors, limit)
         if r:
+            #d1 = d.decode()
             if count and args.action == 'json': print(",")
-            actions[args.action](d1, r)
+            # noinspection PyCallingNonCallable
+            actions[args.action](d, r)
             count += 1
             if count >= args.limit_output_dirs:
                 break
     if args.action == 'json': print("]")
 
-
-def match_dir_by_contents(d, selectors, action='test', limit=0):
-    """
-    Tests a directory
-
-    :param action:
-    :param d: dict representing a directory
-    :param selectors: list of compiled regexps to apply to dir contents
-    :return:
-    """
-    # logger.info("match_dir(%s,%s,%r,%r)" % (d['name'], selectors, action, limit))
-    rslts = []
-    for f in d['contents']:
-        for s in selectors:
-            if s.match(f[1]):
-                if action == 'test':
-                    return True # similar to limit=1
-                if (limit and limit <= len(rslts)):
-                    break
-                rslts.append(f)
-
-    if action == 'test':
-        return False
-    if action == 'count':
-        return len(rslts)
-    elif action in ('list', 'json'):
-        return rslts
-    else:
-        raise Exception('Unknown action: ', action)
 
 
 def run(args):
