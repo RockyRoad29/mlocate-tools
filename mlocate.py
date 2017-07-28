@@ -218,7 +218,7 @@ class MLocateDB:
 
             # directory details
             dir_seconds, dir_nanos, padding = struct.unpack('>qli', buf)
-            d = DirEntry(bname=read_cstring(self.db),
+            d = DirBlock(bname=read_cstring(self.db),
                          dt=datetime.datetime.fromtimestamp(dir_seconds).replace(microsecond=round(dir_nanos / 1000)),
                          contents= [t for t in iter(self._read_direntry, None)]
             )
@@ -235,7 +235,7 @@ class MLocateDB:
         return bool(flag), name
 
 
-class DirEntry:
+class DirBlock:
     def __init__(self, bname, dt, contents):
         self.bname = bname
         self.dt = dt
@@ -243,7 +243,7 @@ class DirEntry:
 
     def decode(self):
         r"""
-        Returns a printable and readable equivalent of the given direntry.
+        Returns a printable and readable dict representing the current instance.
 
           - the byte arrays are decoded, errors are handled
               - with backslash replacement
@@ -253,7 +253,7 @@ class DirEntry:
         Check the warning messages triggered below: they should include full path
 
         >>> import datetime
-        >>> d = DirEntry(bname=b"/some/messy\xe9ename/in/path",
+        >>> d = DirBlock(bname=b"/some/messy\xe9ename/in/path",
         ...              dt=datetime.datetime(2013, 8, 16, 17, 37, 18, 885441),
         ...              contents=[(False, b'messy\xe9efilename.jpg'),
         ...                        (False, b'110831202504820_47_000_apx_470_.jpg')])
@@ -263,7 +263,7 @@ class DirEntry:
         ...        'contents': [(False, 'messy\\xe9efilename.jpg'), (False, '110831202504820_47_000_apx_470_.jpg')]}
         True
 
-        :return:
+        :return: dict
         """
         dirname = self.name
         return dict(name=dirname,
