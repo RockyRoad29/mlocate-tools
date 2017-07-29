@@ -16,6 +16,7 @@ import argparse
 import os
 import re
 import mlocate
+from dict_of_lists import DictOfLists
 
 MLOCATE_DEFAULT_DB = "/var/lib/mlocate/mlocate.db"
 logging.basicConfig(level='DEBUG')
@@ -62,8 +63,9 @@ class DirStack:
     INITIAL_CK = hashlib.sha256().hexdigest()
     EMPTY_DIR_CK = hashlib.sha256(b'[]').hexdigest()
 
-    def __init__(self, on_pop=None):
+    def __init__(self,on_push=None, on_pop=None):
         self.stack = []
+        self.on_push = on_push
         self.on_pop = on_pop
 
     # -------------------------- Stack read access
@@ -118,6 +120,8 @@ class DirStack:
         :param entry:
         """
         logger.debug("push(%r)", entry)
+        if self.on_push:
+            self.on_push(self, entry)
         ck = hashlib.sha256()
         self.stack.append((entry, ck))
 
@@ -134,7 +138,7 @@ class DirStack:
         name, h = self.stack.pop()
         ck = h.hexdigest()
         if self.on_pop:
-            self.on_pop(self.dir_names(), ck)
+            self.on_pop(self, name, ck)
         return (name, ck)
 
     # --------------------------------------- Multiple stack operation
@@ -211,12 +215,16 @@ class App:
     """
 
     def __init__(self, args):
-        self.ds = DirStack(self.pop_handler)
-        self.by_ck = {}
         logger.info("App(%r)", args)
         self.args = args
         logger.setLevel(self.args.log_level.upper())
         self.selectors = [re.compile(r) for r in args.dir_selectors]
+
+        self.ds = DirStack(self.push_handler, self.pop_handler)
+        self.tree = DictOfLists()
+        self.rtree = DictOfLists()
+        self.by_ck = DictOfLists()
+
 
     def run(self):
         """
@@ -224,14 +232,13 @@ class App:
         >>> app = App(arg_parser().parse_args('-d data/virtualenvs.db /home/mich/\\.virtualenvs/?'.split()))
         >>> app.run() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
         Reporting Duplicates
-        * ... : ... potential duplicates
+        * ... : ... potential duplicates...
+           - /home/mich/.virtualenvs/...
+        ...
+        * ... : ... potential duplicates...
            - /home/mich/.virtualenvs/...
            - /home/mich/.virtualenvs/...
-           - ...
-        * ... : ... potential duplicates
-           - /home/mich/.virtualenvs/...
-           - /home/mich/.virtualenvs/...
-           - ...
+        ...
         """
         mdb = mlocate.MLocateDB()
         mdb.connect(self.args.database)
@@ -270,12 +277,24 @@ class App:
         self.ds.select(d.bname)
         self.ds.sum_contents(d.contents)
 
-    def pop_handler(self, dirnames, ck):
-        dpath = os.sep.encode().join(dirnames)
-        if ck in self.by_ck:
-            self.by_ck[ck].append(dpath)
-        else:
-            self.by_ck[ck] = [dpath]
+    def push_handler(self, ds, entry):
+        """
+        :type ds: DirStack
+        :param ds:
+        :param entry:
+        """
+        pass
+
+    def pop_handler(self, ds, name, ck):
+        """
+
+
+        :type ds: DirStack
+        :type ck: str
+        """
+        self.tree.add_to(ds.get_checksum(-1), ck)
+        dpath = os.sep.encode().join(ds.dir_names()+[name])
+        self.by_ck.add_to(ck, dpath)
 
     def report(self):
         """
@@ -288,23 +307,45 @@ class App:
         # FIXME restriction to top level
         # Sort entries by dirs list
         #wrk = sorted(self.by_ck.items(), lambda x: x[1])
-        wrk = [ (ck, sorted(dirs)) for ck,dirs in sorted(self.by_ck.items(), key=lambda x: x[1]) ]
+        #wrk = [ (ck, sorted(dirs)) for ck,dirs in sorted(self.by_ck.items(), key=lambda x: x[1]) ]
+        # Build reversed tree (parents)
+        for ck, contents in self.tree.items():
+            for d in contents:
+                self.rtree.add_to(d, ck)
+
+        # Select duplicated checksums
+        dups = [ck for ck, l in self.by_ck.items() if (ck != DirStack.EMPTY_DIR_CK) and (len(l) > 1)]
+        if not dups:
+            print("No duplicate found")
+            return None
 
         print ("Reporting Duplicates ")
-        prev = None
-        for ck, dirs in wrk:
-            if ck == DirStack.EMPTY_DIR_CK:
+        for ck in dups:
+            # Check if all parents are as well duplicates (subdup)
+            parents = self.rtree[ck]
+            top = [p for p in parents if p not in dups]
+            if not top:
+                logger.info("Skipping subdup: %s", ck)
+                #typ = 'sub'
                 continue
-            if len(dirs) > 1:
-                print("* {0} : {1} potential duplicates".format(ck, len(dirs)))
-                for d in sorted(dirs):
-                    if prev and (d.startswith(prev + b"/")):
-                        # ignore subdir
-                        pass
-                    else:
-                        print("   - ", mlocate.safe_decode(d))
-                        prev = d
+            if len(top) < len(parents):
+                typ = 'mix'
+                logger.info("Mixed dup %s", ck)
+            else:
+                typ = 'top'
 
+            dirs = self.by_ck[ck]
+            print("* {0} : {1} potential duplicates ({2})".format(ck, len(dirs), typ))
+            for d in sorted(dirs):
+                print("   -", mlocate.safe_decode(d))
+
+    def dups(self):
+        #return [(name, len(l))
+        return [ck for ck, l in self.by_ck.items() if len(l) > 1]
+
+    def top_dups(self):
+        dups = [name for name, l in self.rtree.items() if len(l) > 1]
+        return [(name, self.dirpaths(name, dups)) for name in dups]
 
 def arg_parser():
     """
