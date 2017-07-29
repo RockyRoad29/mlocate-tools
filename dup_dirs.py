@@ -131,11 +131,10 @@ class DirStack:
 
         """
         logger.debug("pop(): %r - %r", self.stack[-1][0], self.stack[-1][1].hexdigest())
-        dpath = os.sep.encode().join(self.dir_names())
         name, h = self.stack.pop()
         ck = h.hexdigest()
         if self.on_pop:
-            self.on_pop(dpath, ck)
+            self.on_pop(self.dir_names(), ck)
         return (name, ck)
 
     # --------------------------------------- Multiple stack operation
@@ -226,12 +225,12 @@ class App:
         >>> app.run() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
         Reporting Duplicates
         * ... : ... potential duplicates
-           -  b'/home/mich/.virtualenvs/...'
-           -  b'/home/mich/.virtualenvs/...'
+           - /home/mich/.virtualenvs/...
+           - /home/mich/.virtualenvs/...
            - ...
         * ... : ... potential duplicates
-           -  b'/home/mich/.virtualenvs/...'
-           -  b'/home/mich/.virtualenvs/...'
+           - /home/mich/.virtualenvs/...
+           - /home/mich/.virtualenvs/...
            - ...
         """
         mdb = mlocate.MLocateDB()
@@ -271,7 +270,8 @@ class App:
         self.ds.select(d.bname)
         self.ds.sum_contents(d.contents)
 
-    def pop_handler(self, dpath, ck):
+    def pop_handler(self, dirnames, ck):
+        dpath = os.sep.encode().join(dirnames)
         if ck in self.by_ck:
             self.by_ck[ck].append(dpath)
         else:
@@ -283,20 +283,27 @@ class App:
         try to identify highest level of each set.
 
         """
-        # TODO Test the restriction to top level
+        dupsdirs = []
+        #filter(lambda t: len(t[1] >1), self.by_ck.items())
+        # FIXME restriction to top level
+        # Sort entries by dirs list
+        #wrk = sorted(self.by_ck.items(), lambda x: x[1])
+        wrk = [ (ck, sorted(dirs)) for ck,dirs in sorted(self.by_ck.items(), key=lambda x: x[1]) ]
+
         print ("Reporting Duplicates ")
         prev = None
-        for ck, dirs in self.by_ck.items():
+        for ck, dirs in wrk:
             if ck == DirStack.EMPTY_DIR_CK:
                 continue
             if len(dirs) > 1:
                 print("* {0} : {1} potential duplicates".format(ck, len(dirs)))
-                for d in dirs:
-                    if prev and (d.startswith(prev + "/")):
+                for d in sorted(dirs):
+                    if prev and (d.startswith(prev + b"/")):
                         # ignore subdir
                         pass
                     else:
-                        print("   - ", d)
+                        print("   - ", mlocate.safe_decode(d))
+                        prev = d
 
 
 def arg_parser():
