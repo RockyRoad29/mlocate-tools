@@ -178,7 +178,7 @@ class MLocateDB:
         Generator for directory elements.
 
         :param limit: int maximum count of directories, 0 for unlimited (default)
-        :return: each yielded element is a dictionary of
+        :return: DirBlock each yielded element is a DirBlock instance made of
                   'name': the full path of the directory,
                   'dt': the directory's modification time,
                   'contents': a list of directory contents, each element being
@@ -223,6 +223,7 @@ class MLocateDB:
                          contents= [t for t in iter(self._read_direntry, None)]
             )
             # NOTE generator not wanted for dir entries: data must be read now.
+
             yield d
 
     def _read_direntry(self):
@@ -279,6 +280,11 @@ class DirBlock:
         :return: str
         """
         return safe_decode(self.bname)
+
+    def match_path(self, selectors):
+        for s in selectors:
+            if s.match(self.name):
+                return True
 
     def match_contents(self, selectors, limit=0):
         """

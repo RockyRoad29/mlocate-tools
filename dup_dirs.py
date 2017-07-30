@@ -24,23 +24,23 @@ logging.basicConfig(level='DEBUG')
 logger = logging.getLogger()
 
 
-class DirStack:
+class DirHashStack:
     """
     Maintains a list of contents checksums for each level of ancestor directories.
 
-    >>> ds = DirStack()
+    >>> ds = DirHashStack()
     >>> contents1 = [(False, b'some'), (False, b'file'), (False, b'and'), (True, b'dir'), (False, b'from'), (False, b'contents')]
     >>> contents2 = [(0, 'some'), (1, 'other'), (0, 'contents')]
 
     >>> ds.select(b"/a/b/c")
     [b'', b'a', b'b', b'c']
-    >>> DirStack.INITIAL_CK
+    >>> DirHashStack.INITIAL_CK
     'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
-    >>> DirStack.EMPTY_DIR_CK
+    >>> DirHashStack.EMPTY_DIR_CK
     '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
-    >>> ds.get_checksum(1) == DirStack.INITIAL_CK
+    >>> ds.get_checksum(1) == DirHashStack.INITIAL_CK
     True
-    >>> ds.get_checksums() == [DirStack.INITIAL_CK]*4
+    >>> ds.get_checksums() == [DirHashStack.INITIAL_CK]*4
     True
     >>> ck1 = ds.sum_contents(contents1).hexdigest()
     >>> ds.get_checksums() == [ck1]*4
@@ -111,7 +111,7 @@ class DirStack:
         Adds an empty subdirectory at the end of the stack,
         with a new cksum.
 
-        >>> ds = DirStack()
+        >>> ds = DirHashStack()
         >>> ds.push(b'a')
         >>> ds.push(b'b')
         >>> ds.entries() # doctest: +NORMALIZE_WHITESPACE
@@ -128,7 +128,7 @@ class DirStack:
 
     def pop(self):
         """
-        >>> ds = DirStack()
+        >>> ds = DirHashStack()
         >>> ds.push(b'a')
         >>> ds.push(b'b')
         >>> ds.pop() # doctest: +ELLIPSIS
@@ -145,7 +145,7 @@ class DirStack:
     # --------------------------------------- Multiple stack operation
     def pushx(self, entries):
         """
-        >>> ds = DirStack()
+        >>> ds = DirHashStack()
         >>> ds.pushx([b'a', b'b', b'c', b'd'])
         [b'a', b'b', b'c', b'd']
         >>> ds.pushx([b"e", b"f", b"g"])
@@ -162,7 +162,7 @@ class DirStack:
         """
         Pops several directories at once.
 
-        >>> ds = DirStack()
+        >>> ds = DirHashStack()
         >>> ds.pushx([b'a', b'b', b'c', b'd'])
         [b'a', b'b', b'c', b'd']
         >>> ds.popx(2)
@@ -178,7 +178,7 @@ class DirStack:
 
     def select(self, dirpath):
         """
-        >>> ds = DirStack()
+        >>> ds = DirHashStack()
 
         >>> ds.select(b"/a/b/c")
         [b'', b'a', b'b', b'c']
@@ -226,7 +226,7 @@ class App:
             regexps = [fnmatch.translate(p) for p in args.dir_selectors]
         self.selectors = [re.compile(r) for r in regexps]
 
-        self.ds = DirStack(self.push_handler, self.pop_handler)
+        self.ds = DirHashStack(self.push_handler, self.pop_handler)
         self.tree = DictOfLists()
         self.rtree = DictOfLists()
         self.by_ck = DictOfLists()
@@ -284,7 +284,7 @@ class App:
 
     def push_handler(self, ds, entry):
         """
-        :type ds: DirStack
+        :type ds: DirHashStack
         :param ds:
         :param entry:
         """
@@ -294,7 +294,7 @@ class App:
         """
 
 
-        :type ds: DirStack
+        :type ds: DirHashStack
         :type ck: str
         """
         self.tree.add_to(ds.get_checksum(-1), ck)
@@ -313,7 +313,7 @@ class App:
                 self.rtree.add_to(d, ck)
 
         # Select duplicated checksums
-        dups = [ck for ck, l in self.by_ck.items() if (ck != DirStack.EMPTY_DIR_CK) and (len(l) > 1)]
+        dups = [ck for ck, l in self.by_ck.items() if (ck != DirHashStack.EMPTY_DIR_CK) and (len(l) > 1)]
         if not dups:
             print("No duplicate found")
             return None

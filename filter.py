@@ -83,7 +83,7 @@ def arg_parser():
     parser.add_argument('-d', '--database', help="name of the mlocate database", default=MLOCATE_DEFAULT_DB)
     parser.add_argument('-I', '--limit-input-dirs', help="Maximum directory entries read from db", type=int, default=0)
     parser.add_argument('-M', '--limit-output-dirs', help="Maximum count of selected directories", type=int, default=0)
-    parser.add_argument('-m', '--limit-output-match', help="Maximum count of selected directories", type=int, default=0)
+    parser.add_argument('-m', '--limit-output-match', help="Maximum count of selected entries", type=int, default=0)
     parser.add_argument('-a', '--action', help="what to do with matched directories",
                         choices=['test', 'count', 'list', 'json'],
                         default='list')
