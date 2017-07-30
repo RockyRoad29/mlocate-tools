@@ -10,6 +10,7 @@ Tries to identify duplicate directory trees, using an mlocate database.
 
 
 """
+import fnmatch
 import hashlib
 import logging
 import argparse
@@ -218,7 +219,12 @@ class App:
         logger.info("App(%r)", args)
         self.args = args
         logger.setLevel(self.args.log_level.upper())
-        self.selectors = [re.compile(r) for r in args.dir_selectors]
+        # convert and compile patterns
+        if args.use_regexps:
+            regexps = args.dir_selectors
+        else:
+            regexps = [fnmatch.translate(p) for p in args.dir_selectors]
+        self.selectors = [re.compile(r) for r in regexps]
 
         self.ds = DirStack(self.push_handler, self.pop_handler)
         self.tree = DictOfLists()
@@ -229,7 +235,7 @@ class App:
     def run(self):
         """
         >> app=App(arg_parser().parse_args("-d /tmp/MyBook.db -I 100 .*[Pp]hotos?/?".split()))
-        >>> app = App(arg_parser().parse_args('-d data/virtualenvs.db /home/mich/\\.virtualenvs/?'.split()))
+        >>> app = App(arg_parser().parse_args('-d data/virtualenvs.db /home/mich/.virtualenvs/*'.split()))
         >>> app.run() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
         Reporting Duplicates
         * ... : ... potential duplicates...
@@ -251,7 +257,7 @@ class App:
 
     def match_path(self, name):
         """
-        >>> app = App(arg_parser().parse_args(['/home/mich/\\.virtualenvs/?']))
+        >>> app = App(arg_parser().parse_args(['-r', '/home/mich/\\.virtualenvs/?']))
         >>> app.match_path('/home/mich/.virtualenvs')
         True
         >>> app.match_path('/home/mich/.virtualenvs/py2/share')
@@ -346,7 +352,8 @@ def arg_parser():
 
     >>> parser = arg_parser()
     >>> parser.print_help()
-    usage: docrunner.py [-h] [-L LOG_LEVEL] [-d DATABASE] [-I LIMIT_INPUT_DIRS]
+    usage: docrunner.py [-h] [-L LOG_LEVEL] [-d DATABASE] [-r]
+                        [-I LIMIT_INPUT_DIRS]
                         [dir_selectors [dir_selectors ...]]
     <BLANKLINE>
     Lookup items in mlocate database
@@ -359,19 +366,27 @@ def arg_parser():
       -L LOG_LEVEL, --log-level LOG_LEVEL
       -d DATABASE, --database DATABASE
                             name of the mlocate database
+      -r, --use-regexps     Patterns are given as regular expressions. Default:
+                            False (glob)
       -I LIMIT_INPUT_DIRS, --limit-input-dirs LIMIT_INPUT_DIRS
                             Maximum directory entries read from db
     >>> parser.parse_args("-L debug -d /tmp/MyBook.db -I 10 .*[Pp]hotos?/?".split())
-    Namespace(database='/tmp/MyBook.db', dir_selectors=['.*[Pp]hotos?/?'], limit_input_dirs=10, log_level='debug')
+    Namespace(database='/tmp/MyBook.db', dir_selectors=['.*[Pp]hotos?/?'], limit_input_dirs=10, log_level='debug', use_regexps=False)
 
    """
     parser = argparse.ArgumentParser()
     parser.description = "Lookup items in mlocate database"
     # parser.add_argument('--verbose', '-v', action='count')
     parser.add_argument('-L', '--log-level', default='WARNING')
-    parser.add_argument('-d', '--database', help="name of the mlocate database", default=MLOCATE_DEFAULT_DB)
-    parser.add_argument('-I', '--limit-input-dirs', help="Maximum directory entries read from db", type=int, default=0)
-    parser.add_argument('dir_selectors', nargs='*', help="filtering regexp for input directories")
+    parser.add_argument('-d', '--database',
+                        help="name of the mlocate database", default=MLOCATE_DEFAULT_DB)
+    parser.add_argument('-r', '--use-regexps', action='store_true',
+                        help="Patterns are given as regular expressions." +
+                        " Default: False (glob)")
+    parser.add_argument('-I', '--limit-input-dirs',
+                        help="Maximum directory entries read from db", type=int, default=0)
+    parser.add_argument('dir_selectors', nargs='*',
+                        help="filtering regexp for input directories")
 
     return parser
 
