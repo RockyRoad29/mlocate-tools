@@ -260,7 +260,6 @@ class App:
         :param name:
         :return:
         """
-        # TODO Move matching methods to MLocateDB class
         # logger.debug("match_path(%r)", name)
         for s in self.selectors:
             if s.match(name):
@@ -302,12 +301,6 @@ class App:
         try to identify highest level of each set.
 
         """
-        dupsdirs = []
-        #filter(lambda t: len(t[1] >1), self.by_ck.items())
-        # FIXME restriction to top level
-        # Sort entries by dirs list
-        #wrk = sorted(self.by_ck.items(), lambda x: x[1])
-        #wrk = [ (ck, sorted(dirs)) for ck,dirs in sorted(self.by_ck.items(), key=lambda x: x[1]) ]
         # Build reversed tree (parents)
         for ck, contents in self.tree.items():
             for d in contents:
