@@ -280,7 +280,7 @@ def do_filter(mdb, args):
             # noinspection PyCallingNonCallable
             actions[args.action](d, r)
             count += 1
-            if count >= args.limit_output_dirs:
+            if args.limit_output_dirs and (count >= args.limit_output_dirs):
                 break
     if args.action == 'json': print("]")
 
