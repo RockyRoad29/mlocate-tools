@@ -8,13 +8,14 @@
 """
 Parses and filter an mlocate database.
 
-Filter directories which contain an entry matching some of the given regexps
->>> args = arg_parser().parse_args('-d /tmp/MyBook.db -I 10 .*\.ini'.split())
->>> run(args)
+Filter directories which contain an entry matching some of the given patterns
+>>> args = arg_parser().parse_args('-d /tmp/MyBook.db -I 10 *.ini'.split())
+>>> run(args) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
 * 2013-08-16 17:03:59.956254 /run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001
     - desktop.ini
 
 """
+import fnmatch
 import logging
 import argparse
 import re
@@ -25,9 +26,6 @@ MLOCATE_DEFAULT_DB = "/var/lib/mlocate/mlocate.db"
 logging.basicConfig(level='DEBUG')
 logger = logging.getLogger()
 
-# TODO better define this script/module: separate filtering and reporting
-# e.g. move filter fonctions to MLocateDB or subclass methods, focus this script on printing
-
 def arg_parser():
     """
     Creates a command line parser suitable for this app.
@@ -35,7 +33,7 @@ def arg_parser():
     >>> parser = arg_parser()
 
     >>> parser.parse_args('.*\\.ini .*\\.desktop'.split()) # doctest: +ELLIPSIS
-    Namespace(...database='/var/lib/mlocate/mlocate.db', ... regexps=['.*\\\\.ini', '.*\\\\.desktop']...)
+    Namespace(...database='/var/lib/mlocate/mlocate.db', ... patterns=['.*\\\\.ini', '.*\\\\.desktop']...)
 
     You can specify an alternate database
     >>> parser.parse_args('-d /tmp/MyBook.db'.split()) # doctest: +ELLIPSIS
@@ -43,20 +41,25 @@ def arg_parser():
 
     This doesn't work: >>> parser.parse_args(['--help'])
     >>> parser.print_help()
-    usage: docrunner.py [-h] [-L LOG_LEVEL] [-C] [-d DATABASE]
+    usage: docrunner.py [-h] [-L LOG_LEVEL] [-C] [-n] [-r] [-D] [-d DATABASE]
                         [-I LIMIT_INPUT_DIRS] [-M LIMIT_OUTPUT_DIRS]
                         [-m LIMIT_OUTPUT_MATCH] [-a {test,count,list,json}]
-                        [regexps [regexps ...]]
+                        [patterns [patterns ...]]
     <BLANKLINE>
     Lookup items in mlocate database
     <BLANKLINE>
     positional arguments:
-      regexps               filtering regexp for filename/dirname
+      patterns              Select only directories with entries matching those
+                            patterns
     <BLANKLINE>
     optional arguments:
       -h, --help            show this help message and exit
       -L LOG_LEVEL, --log-level LOG_LEVEL
-      -C, --show-config     Dry run, only show current configuration
+      -C, --app-config      Show active options
+      -n, --dry-run         Dry run, don't parse database
+      -r, --use-regexps     Patterns are given as regular expressions. Default:
+                            False (glob)
+      -D, --mdb-settings    Print mlocate database settings
       -d DATABASE, --database DATABASE
                             name of the mlocate database
       -I LIMIT_INPUT_DIRS, --limit-input-dirs LIMIT_INPUT_DIRS
@@ -67,13 +70,16 @@ def arg_parser():
                             Maximum count of selected directories
       -a {test,count,list,json}, --action {test,count,list,json}
                             what to do with matched directories
-
    """
     parser = argparse.ArgumentParser()
     parser.description = "Lookup items in mlocate database"
     # parser.add_argument('--verbose', '-v', action='count')
     parser.add_argument('-L', '--log-level', default='WARNING')
-    parser.add_argument('-C', '--show-config', action='store_true', help="Dry run, only show current configuration")
+    parser.add_argument('-C', '--app-config', action='store_true', help="Show active options")
+    parser.add_argument('-n', '--dry-run', action='store_true', help="Dry run, don't parse database")
+    parser.add_argument('-r', '--use-regexps', action='store_true', help="Patterns are given as regular expressions." +
+                                                                        " Default: False (glob)")
+    parser.add_argument('-D', '--mdb-settings', action='store_true', help="Print mlocate database settings")
     parser.add_argument('-d', '--database', help="name of the mlocate database", default=MLOCATE_DEFAULT_DB)
     parser.add_argument('-I', '--limit-input-dirs', help="Maximum directory entries read from db", type=int, default=0)
     parser.add_argument('-M', '--limit-output-dirs', help="Maximum count of selected directories", type=int, default=0)
@@ -81,7 +87,7 @@ def arg_parser():
     parser.add_argument('-a', '--action', help="what to do with matched directories",
                         choices=['test', 'count', 'list', 'json'],
                         default='list')
-    parser.add_argument('regexps', nargs='*', help="filtering regexp for filename/dirname")
+    parser.add_argument('patterns', nargs='*', help="Select only directories with entries matching those patterns")
 
     return parser
 
@@ -97,21 +103,24 @@ def log_level(args):
     logger.setLevel(args.log_level)
 
 
-def show_config(args):
+def print_app_config(args):
     """
     Dry-run, show config only
-    >>> args = arg_parser().parse_args('--show-config'.split())
+    >>> args = arg_parser().parse_args('--app-config --dry-run'.split())
     >>> args # doctest: +ELLIPSIS
-    Namespace(...show_config=True...)
+    Namespace(...app_config=True...)
     >>> run(args) # doctest: +NORMALIZE_WHITESPACE
     action               : list
+    app_config           : True
     database             : /var/lib/mlocate/mlocate.db
+    dry_run              : True
     limit_input_dirs     : 0
     limit_output_dirs    : 0
     limit_output_match   : 0
     log_level            : WARNING
-    regexps              : []
-    show_config          : True
+    mdb_settings         : False
+    patterns             : []
+    use_regexps          : False
 
     :param args:
     """
@@ -202,12 +211,12 @@ actions = {
 
 def do_filter(mdb, args):
     """
-    >>> args = arg_parser().parse_args('-d /tmp/MyBook.db -I 10 .*\\.ini$'.split())
+    >>> args = arg_parser().parse_args('-d /tmp/MyBook.db -I 10 *.ini'.split())
     >>> run(args)
     * 2013-08-16 17:03:59.956254 /run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001
         - desktop.ini
 
-    >>> args = arg_parser().parse_args('-L INFO -d /tmp/MyBook.db -a json -I 100 -M 3 -m 5 .*\\.jpg$'.split())
+    >>> args = arg_parser().parse_args('-L INFO -d /tmp/MyBook.db -a json -I 100 -M 3 -m 5 *.jpg'.split())
     >>> run(args) # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
     [
     {
@@ -250,8 +259,12 @@ def do_filter(mdb, args):
     :param args:
     :return:
     """
-    # compile regexps as bytes patterns
-    selectors = [re.compile(r) for r in args.regexps]
+    # convert and compile patterns
+    if args.use_regexps:
+        regexps = args.patterns
+    else:
+        regexps = [fnmatch.translate(p) for p in args.patterns]
+    selectors = [re.compile(r) for r in regexps]
     count = 0
     if args.action == 'test':
         limit = 1
@@ -272,6 +285,30 @@ def do_filter(mdb, args):
     if args.action == 'json': print("]")
 
 
+def print_mdb_settings(mdb):
+    logger.info("mlocate database header: %r", sorted(mdb.header.items()))
+    # [('conf_block_size', 544), ('file_format', 0), ('req_visibility', 0), ('root', b'/run/media/mich/MyBook')]
+    logger.info("mlocate database configuration: %r", sorted(mdb.conf.items()))
+
+    # import json
+    conf = [(mlocate.safe_decode(k),[mlocate.safe_decode(e) for e in v]) for k,v in sorted(mdb.conf.items())]
+    #        json.dumps(conf, indent=2)
+
+    print("""mlocate database details
+    ====================================
+    Root: {0}
+    Requires visibility: {1}
+    File format: {2}
+
+    Configuration:
+    """.format(
+        mlocate.safe_decode(mdb.header['root']),
+        mdb.header['req_visibility'],
+        mdb.header['file_format'],
+        ))
+    for k,v in conf:
+        print("    - {0} = {1}".format( k,v))
+    print("     ====================================\n\n")
 
 def run(args):
     """
@@ -282,12 +319,19 @@ def run(args):
     # if args.log_level:
     log_level(args)
     logger.info("Running with %r", args)
-    if args.show_config:
-        show_config(args)
-        # TODO show mdb config
-    else:
-        mdb = mlocate.MLocateDB()
-        mdb.connect(args.database)
+
+    if args.app_config:
+        print_app_config(args)
+
+    # error if no pattern provided
+    if not args.dry_run and args.patterns == []:
+        print("You should explicitly provide entries patterns, '*' for all.")
+
+    mdb = mlocate.MLocateDB()
+    mdb.connect(args.database)
+    if args.mdb_settings:
+        print_mdb_settings(mdb)
+    if not args.dry_run:
         do_filter(mdb, args)
 
 

@@ -365,7 +365,6 @@ def arg_parser():
     Namespace(database='/tmp/MyBook.db', dir_selectors=['.*[Pp]hotos?/?'], limit_input_dirs=10, log_level='debug')
 
    """
-    # TODO allow glob expressions (use fnmatch)
     parser = argparse.ArgumentParser()
     parser.description = "Lookup items in mlocate database"
     # parser.add_argument('--verbose', '-v', action='count')
