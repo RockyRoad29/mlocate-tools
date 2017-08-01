@@ -365,4 +365,5 @@ def run(args):
 
 if __name__ == '__main__':
     import sys
-    run(main_parser().parse_args(sys.argv))
+    LOGGER.info('arguments: %r', sys.argv)
+    run(main_parser().parse_args())
