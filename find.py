@@ -160,6 +160,11 @@ def do_filter(mdb, args):
     :param args: argparse.Namespace
     :return:
     """
+    # error if no pattern provided
+    if args.patterns == []:
+        print("You should explicitly provide entries patterns, '*' for all.")
+        return
+
     # convert and compile patterns
     if args.use_regexps:
         regexps = args.patterns

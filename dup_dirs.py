@@ -18,11 +18,7 @@ import os
 import re
 import mlocate
 from dict_of_lists import DictOfLists
-
-MLOCATE_DEFAULT_DB = "/var/lib/mlocate/mlocate.db"
-logging.basicConfig(level='DEBUG')
-logger = logging.getLogger()
-
+from cli import LOGGER
 
 class DirHashStack:
     """
@@ -120,7 +116,7 @@ class DirHashStack:
 
         :param entry:
         """
-        logger.debug("push(%r)", entry)
+        LOGGER.debug("push(%r)", entry)
         if self.on_push:
             self.on_push(self, entry)
         ck = hashlib.sha256()
@@ -135,7 +131,7 @@ class DirHashStack:
         (b'b', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
 
         """
-        logger.debug("pop(): %r - %r", self.stack[-1][0], self.stack[-1][1].hexdigest())
+        LOGGER.debug("pop(): %r - %r", self.stack[-1][0], self.stack[-1][1].hexdigest())
         name, h = self.stack.pop()
         ck = h.hexdigest()
         if self.on_pop:
@@ -185,13 +181,13 @@ class DirHashStack:
         >>> ds.select(b"/a/b/e")
         [b'', b'a', b'b', b'e']
         """
-        logger.info("select(%r)", dirpath)
+        LOGGER.info("select(%r)", dirpath)
         l1 = dirpath.split(os.sep.encode())
         # find common stem
         lvl=0
         while (lvl<self.level()) and (lvl<len(l1)):
             if l1[lvl] != self.stack[lvl][0]:
-                logger.info("back to level %d", lvl)
+                LOGGER.info("back to level %d", lvl)
                 break
             lvl +=1
         self.popx(self.level() - lvl)
@@ -202,10 +198,10 @@ class DirHashStack:
         # Separate entries with "\0", dirs with "\n
         # chunk = ("\0".join(contents) + "\n").encode(encoding)
         chunk = repr(contents).encode(encoding)
-        logger.debug("sum_contents(%r)", contents)
+        LOGGER.debug("sum_contents(%r)", contents)
         for a, h in self.stack:
             h.update(chunk)
-            logger.debug("%r: %r", a, h.hexdigest())
+            LOGGER.debug("%r: %r", a, h.hexdigest())
         return hashlib.sha256(chunk)
 
 class App:
@@ -216,9 +212,7 @@ class App:
     """
 
     def __init__(self, args):
-        logger.info("App(%r)", args)
         self.args = args
-        logger.setLevel(self.args.log_level.upper())
         # convert and compile patterns
         if args.use_regexps:
             regexps = args.dir_selectors
@@ -234,8 +228,11 @@ class App:
 
     def run(self):
         """
-        >> app=App(arg_parser().parse_args("-d /tmp/MyBook.db -I 100 .*[Pp]hotos?/?".split()))
-        >>> app = App(arg_parser().parse_args('-d data/virtualenvs.db /home/mich/.virtualenvs/*'.split()))
+        >> from cli import main_parser
+        >> args = main_parser().parse_args("-d /tmp/MyBook.db -I 100 dups .*[Pp]hotos?/?".split())
+        >>> args = argparse.Namespace(database='data/virtualenvs.db', dir_selectors=['/home/mich/.virtualenvs/*'],
+        ...         limit_input_dirs=0, use_regexps=False)
+        >>> app = App(args)
         >>> app.run() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
         Reporting Duplicates
         * ... : ... potential duplicates...
@@ -257,7 +254,8 @@ class App:
 
     def match_path(self, name):
         """
-        >>> app = App(arg_parser().parse_args(['-r', '/home/mich/\\.virtualenvs/?']))
+        >>> args = argparse.Namespace(app_config=False, command='dups', database='/var/lib/mlocate/mlocate.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/\\.virtualenvs/?'], use_regexps=True)
+        >>> app = App(args)
         >>> app.match_path('/home/mich/.virtualenvs')
         True
         >>> app.match_path('/home/mich/.virtualenvs/py2/share')
@@ -266,7 +264,7 @@ class App:
         :param name:
         :return:
         """
-        # logger.debug("match_path(%r)", name)
+        # LOGGER.debug("match_path(%r)", name)
         for s in self.selectors:
             if s.match(name):
                 return True
@@ -277,7 +275,7 @@ class App:
 
         :param d: an element returned by MLocate.load_dirs()
         """
-        logger.info("process_dir(%r)", d)
+        LOGGER.info("process_dir(%r)", d)
         #dpath = d['name'].split(os.sep)
         self.ds.select(d.bname)
         self.ds.sum_contents(d.contents)
@@ -324,12 +322,12 @@ class App:
             parents = self.rtree[ck]
             top = [p for p in parents if p not in dups]
             if not top:
-                logger.info("Skipping subdup: %s", ck)
+                LOGGER.info("Skipping subdup: %s", ck)
                 #typ = 'sub'
                 continue
             if len(top) < len(parents):
                 typ = 'mix'
-                logger.info("Mixed dup %s", ck)
+                LOGGER.info("Mixed dup %s", ck)
             else:
                 typ = 'top'
 
@@ -345,53 +343,3 @@ class App:
     def top_dups(self):
         dups = [name for name, l in self.rtree.items() if len(l) > 1]
         return [(name, self.dirpaths(name, dups)) for name in dups]
-
-def arg_parser():
-    """
-    Creates a command line parser suitable for this app.
-
-    >>> parser = arg_parser()
-    >>> parser.print_help()
-    usage: docrunner.py [-h] [-L LOG_LEVEL] [-d DATABASE] [-r]
-                        [-I LIMIT_INPUT_DIRS]
-                        [dir_selectors [dir_selectors ...]]
-    <BLANKLINE>
-    Lookup items in mlocate database
-    <BLANKLINE>
-    positional arguments:
-      dir_selectors         filtering regexp for input directories
-    <BLANKLINE>
-    optional arguments:
-      -h, --help            show this help message and exit
-      -L LOG_LEVEL, --log-level LOG_LEVEL
-      -d DATABASE, --database DATABASE
-                            name of the mlocate database
-      -r, --use-regexps     Patterns are given as regular expressions. Default:
-                            False (glob)
-      -I LIMIT_INPUT_DIRS, --limit-input-dirs LIMIT_INPUT_DIRS
-                            Maximum directory entries read from db
-    >>> parser.parse_args("-L debug -d /tmp/MyBook.db -I 10 .*[Pp]hotos?/?".split())
-    Namespace(database='/tmp/MyBook.db', dir_selectors=['.*[Pp]hotos?/?'], limit_input_dirs=10, log_level='debug', use_regexps=False)
-
-   """
-    parser = argparse.ArgumentParser()
-    parser.description = "Lookup items in mlocate database"
-    # parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('-L', '--log-level', default='WARNING')
-    parser.add_argument('-d', '--database',
-                        help="name of the mlocate database", default=MLOCATE_DEFAULT_DB)
-    parser.add_argument('-r', '--use-regexps', action='store_true',
-                        help="Patterns are given as regular expressions." +
-                        " Default: False (glob)")
-    parser.add_argument('-I', '--limit-input-dirs',
-                        help="Maximum directory entries read from db", type=int, default=0)
-    parser.add_argument('dir_selectors', nargs='*',
-                        help="filtering regexp for input directories")
-
-    return parser
-
-
-if __name__ == '__main__':
-    cli_args = arg_parser().parse_args()
-    # print "Would run with", args
-    App(cli_args).run()

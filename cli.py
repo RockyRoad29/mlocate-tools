@@ -122,7 +122,7 @@ def main_parser():
 def add_find_command(cmds):
     """
     >>> parser = base_parser(description="Test parser")
-    >>> cmds = parser.add_subparsers(help='Command specifier', dest='cmd', title="command")
+    >>> cmds = parser.add_subparsers(help='Command specifier', dest='command', title="Command")
     >>> cmd = add_find_command(cmds)
     >>> cmd.print_help() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
     usage: ... find [-h] [-M LIMIT_OUTPUT_DIRS] [-m LIMIT_OUTPUT_MATCH]
@@ -201,29 +201,45 @@ def add_find_command(cmds):
 def add_dups_command(cmds):
     """
     >>> parser = base_parser(description="Test parser")
-    >>> cmds = parser.add_subparsers(help='Command specifier', dest='cmd', title="command")
+    >>> cmds = parser.add_subparsers(help='Command specifier', dest='command', title="command")
     >>> cmd = add_dups_command(cmds)
     >>> cmd.print_help() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    usage: ... dups [-h] [patterns [patterns ...]]
+    usage: ... dups [-h] [dir_selectors [dir_selectors ...]]
     <BLANKLINE>
     positional arguments:
-      patterns    Select only directories with entries matching those patterns
+      dir_selectors  filtering regexp for input directories
     <BLANKLINE>
     optional arguments:
       -h, --help  show this help message and exit
 
+    >>> parser.parse_args('-r dups /home/mich/\\.virtualenvs/?'.split()) == argparse.Namespace(app_config=False, command='dups', database='/var/lib/mlocate/mlocate.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/\\.virtualenvs/?'], use_regexps=True)
+    True
+    >>> args = parser.parse_args('-d data/virtualenvs.db dups /home/mich/.virtualenvs/*'.split())
+    >>> args == argparse.Namespace(app_config=False, command='dups', database='data/virtualenvs.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/.virtualenvs/*'], use_regexps=False)
+    True
+    >>> run(args) # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    Reporting Duplicates
+    * ... : ... potential duplicates...
+       - /home/mich/.virtualenvs/...
+    ...
+    * ... : ... potential duplicates...
+       - /home/mich/.virtualenvs/...
+       - /home/mich/.virtualenvs/...
+    ...
+    >>> parser.parse_args("-d /tmp/MyBook.db -I 100 dups .*[Pp]hotos?/?".split()) == argparse.Namespace(app_config=False, command='dups', database='/tmp/MyBook.db', dry_run=False, limit_input_dirs=100, log_level='WARNING', mdb_settings=False, dir_selectors=['.*[Pp]hotos?/?'], use_regexps=False)
+    True
 
     """
     cmd = cmds.add_parser('dups',
                           help='detect potential duplicate directory trees')
-    cmd.add_argument('patterns', nargs='*',
-                     help="Select only directories with entries matching those patterns")
+    cmd.add_argument('dir_selectors', nargs='*',
+                        help="filtering regexp for input directories")
     return cmd
 
 def add_tree_command(cmds):
     """
     >>> parser = base_parser(description="Test parser")
-    >>> cmds = parser.add_subparsers(help='Command specifier', dest='cmd', title="command")
+    >>> cmds = parser.add_subparsers(help='Command specifier', dest='command', title="command")
     >>> cmd = add_tree_command(cmds)
     >>> cmd.print_help()# doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
     usage: ... tree [-h]
@@ -315,10 +331,6 @@ def run(args):
     if args.app_config:
         print_app_config(args)
 
-    # error if no pattern provided
-    if not args.dry_run and args.patterns == []:
-        print("You should explicitly provide entries patterns, '*' for all.")
-
     mdb = mlocate.MLocateDB()
     mdb.connect(args.database)
     if args.mdb_settings:
@@ -327,8 +339,11 @@ def run(args):
     if not args.dry_run:
         # FIXME dry_run may be redundant
         if args.command == 'find':
-            from filter import do_filter
+            from find import do_filter
             do_filter(mdb, args)
+        elif args.command == 'dups':
+            from dup_dirs import App
+            App(args).run()
         elif args.command:
             print("FIXME NotImplemented")
 
