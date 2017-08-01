@@ -61,42 +61,6 @@ MLOCATE_DEFAULT_DB = "/var/lib/mlocate/mlocate.db"
 logging.basicConfig(level='DEBUG')
 logger = logging.getLogger()
 
-def arg_parser():
-    """
-    Creates a command line parser suitable for this app.
-
-    >>> parser = arg_parser()
-
-   """
-    parser = argparse.ArgumentParser()
-    parser.description = "Lookup items in mlocate database"
-    # parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('-L', '--log-level', default='WARNING')
-    parser.add_argument('-n', '--dry-run', action='store_true', help="Dry run, don't parse database")
-    parser.add_argument('-r', '--use-regexps', action='store_true', help="Patterns are given as regular expressions." +
-                                                                        " Default: False (glob)")
-    parser.add_argument('-D', '--mdb-settings', action='store_true', help="Print mlocate database settings")
-    parser.add_argument('-d', '--database', help="name of the mlocate database", default=MLOCATE_DEFAULT_DB)
-    parser.add_argument('-I', '--limit-input-dirs', help="Maximum directory entries read from db", type=int, default=0)
-    parser.add_argument('-M', '--limit-output-dirs', help="Maximum count of selected directories", type=int, default=0)
-    parser.add_argument('-l', '--levels', help="Maximum depth of subtree reporting", type=int, default=sys.maxsize)
-
-    parser.add_argument('patterns', nargs='*', help="Select only directories with entries matching those patterns")
-
-    return parser
-
-
-def log_level(args):
-    """
-    adjust the logging level
-    >>> arg_parser().parse_args('--log-level CRITICAL'.split()) # doctest: +ELLIPSIS
-    Namespace(...log_level='CRITICAL'...)
-
-    :param args:
-    """
-    logger.setLevel(args.log_level)
-
-
 
 def print_tree(tree, depth=0):
     tree.print_graph(depth)
@@ -132,54 +96,3 @@ def do_subtree(mdb, args):
         print_tree(tree, args.levels)
 
 
-def print_mdb_settings(mdb):
-    logger.info("mlocate database header: %r", sorted(mdb.header.items()))
-    # [('conf_block_size', 544), ('file_format', 0), ('req_visibility', 0), ('root', b'/run/media/mich/MyBook')]
-    logger.info("mlocate database configuration: %r", sorted(mdb.conf.items()))
-
-    # import json
-    conf = [(mlocate.safe_decode(k),[mlocate.safe_decode(e) for e in v]) for k,v in sorted(mdb.conf.items())]
-    #        json.dumps(conf, indent=2)
-
-    print("""mlocate database details
-    ====================================
-    Root: {0}
-    Requires visibility: {1}
-    File format: {2}
-
-    Configuration:
-    """.format(
-        mlocate.safe_decode(mdb.header['root']),
-        mdb.header['req_visibility'],
-        mdb.header['file_format'],
-        ))
-    for k,v in conf:
-        print("    - {0} = {1}".format( k,v))
-    print("     ====================================\n\n")
-
-def run(args):
-    """
-    Runs the program according to given arguments.
-
-    :param args: the parsed arguments from command line
-    """
-    # if args.log_level:
-    log_level(args)
-    logger.info("Running with %r", args)
-
-    # error if no pattern provided
-    if not args.dry_run and args.patterns == []:
-        print("You should explicitly provide entries patterns, '*' for all.")
-
-    mdb = mlocate.MLocateDB()
-    mdb.connect(args.database)
-    if args.mdb_settings:
-        print_mdb_settings(mdb)
-    if not args.dry_run:
-        do_subtree(mdb, args)
-
-
-if __name__ == '__main__':
-    cli_args = arg_parser().parse_args()
-    # print "Would run with", args
-    run(cli_args)

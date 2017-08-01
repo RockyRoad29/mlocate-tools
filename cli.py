@@ -242,13 +242,26 @@ def add_tree_command(cmds):
     >>> cmds = parser.add_subparsers(help='Command specifier', dest='command', title="command")
     >>> cmd = add_tree_command(cmds)
     >>> cmd.print_help()# doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    usage: ... tree [-h]
+    usage: ... tree [-h] [patterns [patterns ...]]
+    <BLANKLINE>
+    positional arguments:
+      patterns    Select trees whose root is matching one of those patterns fs
     <BLANKLINE>
     optional arguments:
       -h, --help  show this help message and exit
 
+    >>> args = argparse.Namespace(app_config=False, command='tree', database='/tmp/MyBook.db', dry_run=False,
+    ...                           patterns=[],
+    ...                           limit_input_dirs=0, log_level='WARNING', mdb_settings=False, use_regexps=True)
+
+    >>> parser.parse_args('-d /tmp/MyBook.db -r tree'.split()) == args
+    True
+    >>> run(args) # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+
     """
     cmd = cmds.add_parser('tree', help='prints selected subtrees')
+    cmd.add_argument('patterns', nargs='*',
+                        help="Select trees whose root is matching one of those patterns fs")
     return cmd
 
 def log_level(args):
@@ -344,6 +357,9 @@ def run(args):
         elif args.command == 'dups':
             from dup_dirs import App
             App(args).run()
+        elif args.command == 'tree':
+            from subtree import do_subtree
+            do_subtree(mdb, args)
         elif args.command:
             print("FIXME NotImplemented")
 
