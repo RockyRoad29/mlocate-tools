@@ -242,24 +242,36 @@ def add_tree_command(cmds):
     >>> cmds = parser.add_subparsers(help='Command specifier', dest='command', title="command")
     >>> cmd = add_tree_command(cmds)
     >>> cmd.print_help()# doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    usage: ... tree [-h] [patterns [patterns ...]]
+    usage: ... tree [-h] [-M LIMIT_OUTPUT_DIRS] [-l LEVELS]
+                    [patterns [patterns ...]]
     <BLANKLINE>
     positional arguments:
-      patterns    Select trees whose root is matching one of those patterns fs
+      patterns              Select trees whose root is matching one of those
+                            patterns fs
     <BLANKLINE>
     optional arguments:
-      -h, --help  show this help message and exit
+      -h, --help            show this help message and exit
+      -M LIMIT_OUTPUT_DIRS, --limit-output-dirs LIMIT_OUTPUT_DIRS
+                            Maximum count of selected directories
+      -l LEVELS, --levels LEVELS
+                            Maximum depth of displayed tree fs fs
 
     >>> args = argparse.Namespace(app_config=False, command='tree', database='/tmp/MyBook.db', dry_run=False,
-    ...                           patterns=[],
+    ...                           patterns=['/run/media/mich/MyBook/Archives'], levels=3, limit_output_dirs=0,
     ...                           limit_input_dirs=0, log_level='WARNING', mdb_settings=False, use_regexps=True)
-
-    >>> parser.parse_args('-d /tmp/MyBook.db -r tree'.split()) == args
+    >>> parser.parse_args('-d /tmp/MyBook.db -r tree /run/media/mich/MyBook/Archives --levels 3'.split()) == args
     True
     >>> run(args) # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    ├── Admin
+    └── Devlp
 
     """
     cmd = cmds.add_parser('tree', help='prints selected subtrees')
+
+    cmd.add_argument('-M', '--limit-output-dirs', type=int, default=0,
+                     help="Maximum count of selected directories")
+    cmd.add_argument('-l', '--levels', type=int, default=0,
+                 help="Maximum depth of displayed tree fs fs")
     cmd.add_argument('patterns', nargs='*',
                         help="Select trees whose root is matching one of those patterns fs")
     return cmd
@@ -365,5 +377,4 @@ def run(args):
 
 if __name__ == '__main__':
     import sys
-    LOGGER.info('arguments: %r', sys.argv)
     run(main_parser().parse_args())

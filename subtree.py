@@ -8,9 +8,23 @@
 """
 Parses an mlocate database and prints parts of its contents.
 
+>>> mdb = mlocate.MLocateDB()
+
 >> args = arg_parser().parse_args('-d /tmp/MyBook.db  /run/media/mich/MyBook/Archives --levels 3'.split())
->>> args = arg_parser().parse_args('-L INFO -d /tmp/MyBook.db  /run/media/mich/MyBook/backups --levels 3'.split())
->>> run(args) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+>>> args = argparse.Namespace(app_config=False, command='tree', database='/tmp/MyBook.db', dry_run=False,
+...                           levels=3, patterns=['/run/media/mich/MyBook/Archives'],limit_output_dirs=0,
+...                           limit_input_dirs=0, log_level='WARNING', mdb_settings=False, use_regexps=False)
+>>> mdb.connect(args.database)
+>>> do_subtree(mdb, args) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
+    ├── Admin
+    └── Devlp
+
+>> args = arg_parser().parse_args('-L INFO -d /tmp/MyBook.db  /run/media/mich/MyBook/backups --levels 3'.split())
+>>> args = argparse.Namespace(database='/tmp/MyBook.db',levels=3, use_regexps=False,
+...                           patterns=['/run/media/mich/MyBook/backups'],limit_output_dirs=0,
+...                           limit_input_dirs=0)
+>>> mdb.connect(args.database)
+>>> do_subtree(mdb, args) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     ├── Ovi
     │   └── Sauvegardes
     ├── WD-MyBookEssential
