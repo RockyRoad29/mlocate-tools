@@ -85,14 +85,14 @@ def do_subtree(mdb, args):
         regexps = args.patterns
     else:
         regexps = [fnmatch.translate(p) for p in args.patterns]
-    selectors = [re.compile(r) for r in regexps]
+    selectors = [re.compile(r.encode()) for r in regexps]
 
     tree = None
     count = 0
     for d in mdb.load_dirs(args.limit_input_dirs):
         if tree:
-            if tree.load(d.name):
-                logger.info("loaded %s", d.name)
+            if tree.load(d.bname):
+                logger.info("loaded %s", d.bname)
             else:
                 logger.debug("end of subtree")
                 print_tree(tree, args.levels)
@@ -102,7 +102,7 @@ def do_subtree(mdb, args):
                     break
         else:
             if d.match_path(selectors):
-                tree = Tree(d.name + "/")
+                tree = Tree(d.bname + b"/")
     if tree:
         print_tree(tree, args.levels)
 

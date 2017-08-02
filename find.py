@@ -33,7 +33,7 @@ def print_dir_test(d, r=True):
     :param r: Unused. Present to match action signature
     """
     assert r
-    print("{0} {1}".format(d.dt, d.name))
+    print("{0} {1}".format(d.dt, binutils.safe_decode(d.bname)))
 
 
 def print_dir_count(d, r):
@@ -48,7 +48,7 @@ def print_dir_count(d, r):
     :param d: dict representing a directory
     :param r: the matches count
     """
-    print("[{0}] {2} matches in {1}".format(d.dt, d.name, len(r)))
+    print("[{0}] {2} matches in {1}".format(d.dt, binutils.safe_decode(d.bname), len(r)))
 
 
 def print_dir_list(d, r):
@@ -64,8 +64,8 @@ def print_dir_list(d, r):
     :param d: dict representing a directory
     :param r: list of matched entries
     """
-    # TODO if DIRBLOCKS_IN_BYTES: d = d.decode()
-    print("* {0} {1}".format(d.dt, d.name))
+    # TODO if DIRBLOCKS_IN_BYTES:
+    print("* {0} {1}".format(d.dt, binutils.safe_decode(d.bname)))
     for f in r:
         print("    - {0}{1}".format(binutils.safe_decode(f[1]), ["", "/"][f[0]]))
 
@@ -87,10 +87,10 @@ def print_dir_json(d, r):
       "name": "/some/directory/test"
     }
 
-    :param d: dict representing a directory
+    :param d: DirBlock representing a directory
     :param r: list of matched entries
     """
-    data = dict(name=d.name, dt=str(d.dt), matches=[(flag, binutils.safe_decode(f)) for flag, f in r])
+    data = dict(name=binutils.safe_decode(d.bname), dt=str(d.dt), matches=[(flag, binutils.safe_decode(f)) for flag, f in r])
     print(json.dumps(data, indent=2, sort_keys=True))
 
 
@@ -174,7 +174,7 @@ def do_filter(mdb, args):
         regexps = args.patterns
     else:
         regexps = [fnmatch.translate(p) for p in args.patterns]
-    selectors = [re.compile(r) for r in regexps]
+    selectors = [re.compile(r.encode()) for r in regexps]
     count = 0
 
     if args.action == 'test':

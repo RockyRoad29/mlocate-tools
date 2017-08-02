@@ -221,7 +221,7 @@ class App:
             regexps = args.dir_selectors
         else:
             regexps = [fnmatch.translate(p) for p in args.dir_selectors]
-        self.selectors = [re.compile(r) for r in regexps]
+        self.selectors = [re.compile(r.encode()) for r in regexps]
 
         self.ds = DirHashStack(self.push_handler, self.pop_handler)
         self.tree = DictOfLists()
@@ -250,7 +250,7 @@ class App:
         mdb.connect(self.args.database)
 
         for d in mdb.load_dirs(self.args.limit_input_dirs):
-            if self.match_path(d.name):
+            if self.match_path(d.bname):
                 self.process_dir(d)
 
         self.report()
@@ -259,9 +259,9 @@ class App:
         """
         >>> args = argparse.Namespace(app_config=False, command='dups', database='/var/lib/mlocate/mlocate.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/\\.virtualenvs/?'], use_regexps=True)
         >>> app = App(args)
-        >>> app.match_path('/home/mich/.virtualenvs')
+        >>> app.match_path(b'/home/mich/.virtualenvs')
         True
-        >>> app.match_path('/home/mich/.virtualenvs/py2/share')
+        >>> app.match_path(b'/home/mich/.virtualenvs/py2/share')
         True
 
         :param name:

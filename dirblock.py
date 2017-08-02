@@ -50,7 +50,7 @@ class DirBlock:
 
         :return: dict
         """
-        dirname = self.name
+        dirname = safe_decode(self.bname)
         return dict(name=dirname,
                     dt=str(self.dt),
                     contents=[(flag, safe_decode(f, dirname+"/")) for flag,f in self.contents]
@@ -67,7 +67,7 @@ class DirBlock:
 
     def match_path(self, selectors):
         for s in selectors:
-            if s.match(self.name):
+            if s.match(self.bname):
                 return True
 
     def match_contents(self, selectors, limit=0):
@@ -82,7 +82,7 @@ class DirBlock:
         rslts = []
         for e in self.contents:
             # FIXME why not encoding regexs and match bytes ?
-            name = safe_decode(e[1])
+            name = e[1]
             for s in selectors:
                 if s.match(name):
                     rslts.append(e)

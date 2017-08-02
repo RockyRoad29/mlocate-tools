@@ -1,25 +1,27 @@
 # coding=utf-8
 import logging
+from binutils import safe_decode
+
 logging.basicConfig(level=10)
 
 class Tree:
     """
-    >>> o = Tree("/run/media/MyBook/"); o.rel_path
-    ''
-    >>> o.load("/run/media/MyBook/Archives")
-    'Archives/'
-    >>> o.load("/run/media/MyBook/Archives/2012")
-    'Archives/2012/'
-    >>> o.load("/run/media/MyBook/Archives/2017/02")
-    'Archives/2017/02/'
+    >>> o = Tree(b"/run/media/MyBook/"); o.rel_path
+    b''
+    >>> o.load(b"/run/media/MyBook/Archives")
+    b'Archives/'
+    >>> o.load(b"/run/media/MyBook/Archives/2012")
+    b'Archives/2012/'
+    >>> o.load(b"/run/media/MyBook/Archives/2017/02")
+    b'Archives/2017/02/'
     >>> o.depth
     3
-    >>> o.load("/run/media/MyBook/Backup/2017-02")
-    'Backup/2017-02/'
-    >>> o.load("/run/media/Elsewhere") is None
+    >>> o.load(b"/run/media/MyBook/Backup/2017-02")
+    b'Backup/2017-02/'
+    >>> o.load(b"/run/media/Elsewhere") is None
     True
     >>> o.tree
-    [['Archives', [['2012', []], ['2017', [['02', []]]]]], ['Backup', [['2017-02', []]]]]
+    [[b'Archives', [[b'2012', []], [b'2017', [[b'02', []]]]]], [b'Backup', [[b'2017-02', []]]]]
     >>> o.as_string()
     - Archives
       - 2012
@@ -38,7 +40,7 @@ class Tree:
     def __init__(self, root=""):
         logging.info("Creating tree from %r", root)
         self.root = root
-        self.rel_path = ""
+        self.rel_path = b""
         self.stack = []
         self.tree = []
         #self.tip = self.tree
@@ -66,7 +68,7 @@ class Tree:
             self.pop()
 
         self.pushx(nodes[p2:])
-        self.rel_path = current + '/'
+        self.rel_path = current + b'/'
         return self.rel_path
 
     def push(self, node):
@@ -94,7 +96,7 @@ class Tree:
             self.push(node)
 
     def split(self, rel_path):
-        return rel_path.split('/')
+        return rel_path.split(b'/')
 
     def as_string(self):
         indent='  '
@@ -102,7 +104,7 @@ class Tree:
         def _level(d, st):
             prefix = indent * d + bullet
             for subtree in st:
-                print(prefix + subtree[0])
+                print(prefix + safe_decode(subtree[0]))
                 _level(d+1, subtree[1])
 
         _level(0, self.tree)
@@ -116,10 +118,10 @@ class Tree:
 
             #pfx = prefix + '├── '
             for subtree in st[:-1]:
-                print(prefix + '├── '  + subtree[0])
+                print(prefix + '├── '  + safe_decode(subtree[0]))
                 _level(prefix + "│   ", depth + 1, subtree[1])
 
-            print(prefix + '└── ' + st[-1][0])
+            print(prefix + '└── ' + safe_decode(st[-1][0]))
             _level(prefix + '    ' , depth + 1, st[-1][1])
 
         _level('', 0, self.tree)
