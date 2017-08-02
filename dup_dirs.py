@@ -250,7 +250,7 @@ class App:
         mdb.connect(self.args.database)
 
         for d in mdb.load_dirs(self.args.limit_input_dirs):
-            if self.match_path(d.bname):
+            if self.match_path(d.name):
                 self.process_dir(d)
 
         self.report()
@@ -280,7 +280,7 @@ class App:
         """
         LOGGER.info("process_dir(%r)", d)
         #dpath = d['name'].split(os.sep)
-        self.ds.select(d.bname)
+        self.ds.select(d.name)
         self.ds.sum_contents(d.contents)
 
     def push_handler(self, ds, entry):

@@ -13,20 +13,20 @@ class DirBlock:
     """
     Represents a directory entry as known from an mlocate database.
 
-    :param bname: bytes
+    :param name: bytes
     :param dt: datetime latest of last modification (mtime) and status time (ctime)
     :param contents: list of byte strings representing the names of this dir entries
     """
 
-    def __init__(self, bname, dt, contents):
+    def __init__(self, name, dt, contents):
         # TODO accept bytes or strings transparently. Conversion is client responsability
-        self.bname = bname
+        self.name = name
         self.dt = dt
         self.contents = contents
         self.selection = None
 
-    def decode(self):
-        # TODO confusing definition and use cases
+    def _decode(self):
+        # FIXME confusing definition and use cases. Now used only in doctest
         r"""
         Returns a printable and readable dict representing the current instance.
 
@@ -38,11 +38,11 @@ class DirBlock:
         Check the warning messages triggered below: they should include full path
 
         >>> import datetime
-        >>> d = DirBlock(bname=b"/some/messy\xe9ename/in/path",
+        >>> d = DirBlock(name=b"/some/messy\xe9ename/in/path",
         ...              dt=datetime.datetime(2013, 8, 16, 17, 37, 18, 885441),
         ...              contents=[(False, b'messy\xe9efilename.jpg'),
         ...                        (False, b'110831202504820_47_000_apx_470_.jpg')])
-        >>> d.decode() ==  {
+        >>> d._decode() ==  {
         ...        'dt': '2013-08-16 17:37:18.885441',
         ...        'name': '/some/messy\\xe9ename/in/path',
         ...        'contents': [(False, 'messy\\xe9efilename.jpg'), (False, '110831202504820_47_000_apx_470_.jpg')]}
@@ -50,24 +50,15 @@ class DirBlock:
 
         :return: dict
         """
-        dirname = safe_decode(self.bname)
+        dirname = safe_decode(self.name)
         return dict(name=dirname,
                     dt=str(self.dt),
                     contents=[(flag, safe_decode(f, dirname+"/")) for flag,f in self.contents]
         )
 
-    @property
-    def name(self):
-        """
-        The directory path as decoded string, using `safe_decode()`
-
-        :return: str
-        """
-        return safe_decode(self.bname)
-
     def match_path(self, selectors):
         for s in selectors:
-            if s.match(self.bname):
+            if s.match(self.name):
                 return True
 
     def match_contents(self, selectors, limit=0):
@@ -78,10 +69,9 @@ class DirBlock:
         :param limit: maximum count of matched entries to return
         :return:
         """
-        logger.info("match_contents(%s,%r) for %s" % (selectors, limit, self.bname))
+        logger.info("match_contents(%s,%r) for %s" % (selectors, limit, self.name))
         rslts = []
         for e in self.contents:
-            # FIXME why not encoding regexs and match bytes ?
             name = e[1]
             for s in selectors:
                 if s.match(name):

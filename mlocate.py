@@ -31,7 +31,7 @@ class MLocateDB:
     583
     >>> #[mdb.load_dirs() for i in range(3)]
     >>> for i, d in enumerate(mdb.load_dirs()): # doctest: +ELLIPSIS,+NORMALIZE_WHITESPACE
-    ...     print (i, json.dumps(d.decode(),indent=2,sort_keys=True))
+    ...     print (i, json.dumps(d._decode(),indent=2,sort_keys=True))
     ...     i += 1
     ...     if i >= 3:
     ...         break
@@ -129,7 +129,7 @@ class MLocateDB:
         >>> mdb = MLocateDB()
         >>> mdb.connect('/tmp/MyBook.db')
         >>> for d in mdb.load_dirs(3): # doctest: +ELLIPSIS,+NORMALIZE_WHITESPACE
-        ...     print (json.dumps(d.decode(),indent=2,sort_keys=True))
+        ...     print (json.dumps(d._decode(),indent=2,sort_keys=True))
         {
           "contents": [ [ true, "$RECYCLE.BIN" ], ... [ true, "media" ] ],
           "dt": "2013-08-20 01:55:07.653616",
@@ -187,7 +187,7 @@ class MLocateDB:
 
             # directory details
             dir_seconds, dir_nanos, padding = struct.unpack('>qli', buf)
-            d = DirBlock(bname=binutils.read_cstring(self.db),
+            d = DirBlock(name=binutils.read_cstring(self.db),
                          dt=datetime.datetime.fromtimestamp(dir_seconds).replace(microsecond=round(dir_nanos / 1000)),
                          contents= [t for t in iter(self._read_direntry, None)]
             )

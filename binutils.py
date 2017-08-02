@@ -40,8 +40,8 @@ def read_cstring(f):
     the full path of the problematic name.
 
     :param f: opened readable binary stream (typically a file)
-    :return: a byte array, excluding the final b'\0'
-            You
+    :return: bytes string excluding the final b'\0'
+
     """
     buf = b''
     b = f.read(1)

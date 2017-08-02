@@ -91,8 +91,8 @@ def do_subtree(mdb, args):
     count = 0
     for d in mdb.load_dirs(args.limit_input_dirs):
         if tree:
-            if tree.load(d.bname):
-                logger.info("loaded %s", d.bname)
+            if tree.load(d.name):
+                logger.info("loaded %s", d.name)
             else:
                 logger.debug("end of subtree")
                 print_tree(tree, args.levels)
@@ -102,7 +102,7 @@ def do_subtree(mdb, args):
                     break
         else:
             if d.match_path(selectors):
-                tree = Tree(d.bname + b"/")
+                tree = Tree(d.name + b"/")
     if tree:
         print_tree(tree, args.levels)
 
