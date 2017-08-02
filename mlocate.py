@@ -205,14 +205,42 @@ class MLocateDB:
           "name": "/run/media/mich/MyBook/$RECYCLE.BIN/S-1-5-21-1696441804-2191777423-1598828944-1001"
         }
         """
-        if (limit==0):
-            limit = sys.maxsize
+        def dtest(idx, dirbl, dlimit=0):
+            """
+            Simple dir selector: select all directories until a given count has been reached
+            :param idx: 1-based index of this element
+            :param dirbl: DirBlock
+            :param dlimit: maximum count before stopping iteration
+            :return: -1 when limit has been reached, 1 otherwise
+            """
+            if dlimit and idx > dlimit:
+                return -1
+            return 1
+        return self.load_some_dirs(dtest, dlimit=limit)
 
-        while limit != 0:
-            limit -= 1
+
+    def load_some_dirs(self, dir_test, **kwargs):
+        """
+        Generator for directory elements.
+
+        :param dir_test: a function(num, dir_block, ...) -> int
+               should return 0 to skip, -1 to stop iteration, 1 to yield and continue
+        :param kwargs: keyword arguments to pass to dir_test()
+        :return: DirBlock each yielded element is a DirBlock instance made of
+                  'name': the full path of the directory,
+                  'dt': the directory's modification time,
+                  'contents': a list of directory contents, each element being
+                     - a flag : 1 for a subdirectory, 0 otherwise
+                     - the basename of the entry
+
+        """
+        dir_idx = 0
+
+        while True:
             # header
             buf = self.db.read(16)
             if len(buf) < 16:
+                logger.info("End of file reached. %s tail bytes", len(buf))
                 break
                 # raise StopIteration
 
@@ -222,9 +250,14 @@ class MLocateDB:
                          dt=datetime.datetime.fromtimestamp(dir_seconds).replace(microsecond=round(dir_nanos / 1000)),
                          contents= [t for t in iter(self._read_direntry, None)]
             )
-            # NOTE generator not wanted for dir entries: data must be read now.
+            # NOTE generator not wanted for dir entries: data must be read now always.
+            dir_idx += 1
+            test = dir_test(dir_idx, d, **kwargs)
+            if test < 0:
+                break
+            if test > 0:
+                yield d
 
-            yield d
 
     def _read_direntry(self):
         flag = struct.unpack('b', self.db.read(1))[0]
