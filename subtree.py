@@ -72,8 +72,7 @@ import mlocate
 from tree import Tree
 
 MLOCATE_DEFAULT_DB = "/var/lib/mlocate/mlocate.db"
-logging.basicConfig(level='DEBUG')
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 def print_tree(tree, depth=0):
@@ -81,8 +80,6 @@ def print_tree(tree, depth=0):
 
 
 def do_subtree(mdb, args):
-    """
-    """
     # convert and compile patterns
     if args.use_regexps:
         regexps = args.patterns

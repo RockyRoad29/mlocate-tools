@@ -11,11 +11,14 @@ Filter directories which contain an entry matching some of the given patterns
 """
 import fnmatch
 import logging
-import argparse
 import re
-import mlocate
 import json
 
+import binutils
+import mlocate
+
+
+logger = logging.getLogger(__name__)
 
 def print_dir_test(d, r=True):
     """
@@ -61,9 +64,10 @@ def print_dir_list(d, r):
     :param d: dict representing a directory
     :param r: list of matched entries
     """
+    # TODO if DIRBLOCKS_IN_BYTES: d = d.decode()
     print("* {0} {1}".format(d.dt, d.name))
     for f in r:
-        print("    - {0}{1}".format(mlocate.safe_decode(f[1]), ["", "/"][f[0]]))
+        print("    - {0}{1}".format(binutils.safe_decode(f[1]), ["", "/"][f[0]]))
 
 
 def print_dir_json(d, r):
@@ -86,7 +90,7 @@ def print_dir_json(d, r):
     :param d: dict representing a directory
     :param r: list of matched entries
     """
-    data = dict(name=d.name, dt=str(d.dt), matches=[(flag, mlocate.safe_decode(f)) for flag, f in r])
+    data = dict(name=d.name, dt=str(d.dt), matches=[(flag, binutils.safe_decode(f)) for flag, f in r])
     print(json.dumps(data, indent=2, sort_keys=True))
 
 

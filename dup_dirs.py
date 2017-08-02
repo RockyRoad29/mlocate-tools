@@ -16,9 +16,12 @@ import logging
 import argparse
 import os
 import re
+
+from binutils import safe_decode
 import mlocate
 from dict_of_lists import DictOfLists
-from cli import LOGGER
+
+LOGGER = logging.getLogger(__name__)
 
 class DirHashStack:
     """
@@ -334,7 +337,7 @@ class App:
             dirs = self.by_ck[ck]
             print("* {0} : {1} potential duplicates ({2})".format(ck, len(dirs), typ))
             for d in sorted(dirs):
-                print("   -", mlocate.safe_decode(d))
+                print("   -", safe_decode(d))
 
     def dups(self):
         #return [(name, len(l))

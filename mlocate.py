@@ -9,72 +9,13 @@ import logging
 import struct
 import datetime
 import json
-import sys
 
-logger = logging.getLogger()
-logger.setLevel('INFO')
-
-
-def read_cstring(f):
-    #https://stackoverflow.com/questions/44296354/valueerror-source-code-string-cannot-contain-null-bytes
-    r"""
-    Reads a null-terminated byte sequence from a binary file.
-
-    In order be able to better deal with potential string encoding
-    errors, without altering the real filenames,
-    no assumption is made as this stage about encoding.
-
-    In a utf-8 based system, it may occasionally happen that a filename
-    has a different encoding, or encoded twice.
-
-    OS may replace problematic characters with an interrogation point.
-    Similar behavior may be obtained like this:
-
-    >>> import io
-    >>> s = read_cstring(io.BytesIO(b'3v_laiton_motoris\xe9e.pdf\0\more data'))
-    >>> s
-    b'3v_laiton_motoris\xe9e.pdf'
-    >>> s.decode(errors='replace')
-    '3v_laiton_motoris�e.pdf'
-
-    Another bonus for decoding late is to be able to report the cause of the error in filesystem,
-    the full path of the problematic name.
-
-    :param f: opened readable binary stream (typically a file)
-    :return: a byte array, excluding the final b'\0'
-            You
-    """
-    buf = b''
-    b = f.read(1)
-    while b != b'\0':
-        buf += b
-        b = f.read(1)
-    # work with byte arrays, decode late, for printing.
-    return buf
+import binutils
+from dirblock import DirBlock
 
 
-def safe_decode(bname, prefix=''):
-    r"""
-    >>> safe_decode(b'some/messy\xe9ename/in/path')
-    'some/messy\\xe9ename/in/path'
+logger = logging.getLogger(__name__)
 
-    Check the warning messages triggered below: they should include full path
-    >>> safe_decode(b'messy\xe9efilename.jpg', "some/regular/path/")
-    'messy\\xe9efilename.jpg'
-    >>> safe_decode(b'messy\xe9efilename.jpg', "some/messy\xe9ename/in/path/")
-    'messy\\xe9efilename.jpg'
-
-    :rtype : string decoded
-    :param bname:
-    :param prefix:
-    """
-    try:
-        name = bname.decode()
-    except UnicodeDecodeError as e:
-        logger.warning("Error decoding %r: %s", bname, e.reason)
-        name = bname.decode(errors='backslashreplace')
-        logger.warning("Entry parsed as %r", prefix + name)
-    return name
 
 class MLocateDB:
     """
@@ -147,7 +88,7 @@ class MLocateDB:
         data = struct.unpack('>ibbh', self.db.read(8))
         flds = 'conf_block_size, file_format, req_visibility'.split(', ')
         self.header = dict(zip(flds, data[:-1]))  # padding ignored
-        self.header['root'] = read_cstring(self.db)
+        self.header['root'] = binutils.read_cstring(self.db)
         self.tell()
 
     def _read_conf(self):
@@ -246,7 +187,7 @@ class MLocateDB:
 
             # directory details
             dir_seconds, dir_nanos, padding = struct.unpack('>qli', buf)
-            d = DirBlock(bname=read_cstring(self.db),
+            d = DirBlock(bname=binutils.read_cstring(self.db),
                          dt=datetime.datetime.fromtimestamp(dir_seconds).replace(microsecond=round(dir_nanos / 1000)),
                          contents= [t for t in iter(self._read_direntry, None)]
             )
@@ -264,76 +205,8 @@ class MLocateDB:
         if flag == 2:
             # print('end of dir')
             return None  # end of directory contents
-        name = read_cstring(self.db)
+        name = binutils.read_cstring(self.db)
         # print (flag, name)
         return bool(flag), name
 
 
-class DirBlock:
-    def __init__(self, bname, dt, contents):
-        self.bname = bname
-        self.dt = dt
-        self.contents = contents
-
-    def decode(self):
-        r"""
-        Returns a printable and readable dict representing the current instance.
-
-          - the byte arrays are decoded, errors are handled
-              - with backslash replacement
-              - and a warning is issued with full path of problematique entry
-          - the datetime is converted to its string representation
-
-        Check the warning messages triggered below: they should include full path
-
-        >>> import datetime
-        >>> d = DirBlock(bname=b"/some/messy\xe9ename/in/path",
-        ...              dt=datetime.datetime(2013, 8, 16, 17, 37, 18, 885441),
-        ...              contents=[(False, b'messy\xe9efilename.jpg'),
-        ...                        (False, b'110831202504820_47_000_apx_470_.jpg')])
-        >>> d.decode() ==  {
-        ...        'dt': '2013-08-16 17:37:18.885441',
-        ...        'name': '/some/messy\\xe9ename/in/path',
-        ...        'contents': [(False, 'messy\\xe9efilename.jpg'), (False, '110831202504820_47_000_apx_470_.jpg')]}
-        True
-
-        :return: dict
-        """
-        dirname = self.name
-        return dict(name=dirname,
-                    dt=str(self.dt),
-                    contents=[(flag, safe_decode(f, dirname+"/")) for flag,f in self.contents]
-        )
-
-    @property
-    def name(self):
-        """
-        The directory path as decoded string, using `safe_decode()`
-
-        :return: str
-        """
-        return safe_decode(self.bname)
-
-    def match_path(self, selectors):
-        for s in selectors:
-            if s.match(self.name):
-                return True
-
-    def match_contents(self, selectors, limit=0):
-        """
-        Filters or test directory entries by regexps
-
-        :param selectors: list of compiled string regexps to apply to dir contents
-        :param limit: maximum count of matched entries to return
-        :return:
-        """
-        # logger.info("match_dir(%s,%s,%r,%r)" % (d['name'], selectors, action, limit))
-        rslts = []
-        for e in self.contents:
-            name = safe_decode(e[1])
-            for s in selectors:
-                if s.match(name):
-                    rslts.append(e)
-                    if (limit and limit <= len(rslts)):
-                        return rslts
-        return rslts

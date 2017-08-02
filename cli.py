@@ -11,9 +11,13 @@ Provides command line arguments parsers and common tools.
 """
 import argparse
 import logging
+import logging.config
+
+import binutils
 import mlocate
 
-logging.basicConfig(level='DEBUG')
+
+logging.config.fileConfig('logging.ini')
 LOGGER = logging.getLogger()
 MLOCATE_DEFAULT_DB = "/var/lib/mlocate/mlocate.db"
 
@@ -323,8 +327,8 @@ def print_mdb_settings(mdb):
     # ('root', b'/run/media/mich/MyBook')]
     LOGGER.info("mlocate database configuration: %r", sorted(mdb.conf.items()))
 
-    conf = [(mlocate.safe_decode(k),
-             [mlocate.safe_decode(e) for e in v])
+    conf = [(binutils.safe_decode(k),
+             [binutils.safe_decode(e) for e in v])
             for k, v in sorted(mdb.conf.items())]
 
     print("""mlocate database details
@@ -335,7 +339,7 @@ def print_mdb_settings(mdb):
 
     Configuration:
     """.format(
-        mlocate.safe_decode(mdb.header['root']),
+        binutils.safe_decode(mdb.header['root']),
         mdb.header['req_visibility'],
         mdb.header['file_format'],
         ))
@@ -376,5 +380,4 @@ def run(args):
             print("FIXME NotImplemented")
 
 if __name__ == '__main__':
-    import sys
     run(main_parser().parse_args())
