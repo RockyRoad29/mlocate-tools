@@ -13,14 +13,14 @@ Parses an mlocate database and prints parts of its contents.
 >> args = arg_parser().parse_args('-d /tmp/MyBook.db  /run/media/mich/MyBook/Archives --levels 3'.split())
 >>> args = argparse.Namespace(app_config=False, command='tree', database='/tmp/MyBook.db', dry_run=False,
 ...                           levels=3, patterns=['/run/media/mich/MyBook/Archives'],limit_output_dirs=0,
-...                           limit_input_dirs=0, log_level='WARNING', mdb_settings=False, use_regexps=False)
+...                           limit_input_dirs=0, log_level='WARNING', mdb_settings=False, use_regexps=False, ignore_case=False,)
 >>> mdb.connect(args.database)
 >>> do_subtree(mdb, args) # doctest: +NORMALIZE_WHITESPACE +ELLIPSIS
     ├── Admin
     └── Devlp
 
 >> args = arg_parser().parse_args('-L INFO -d /tmp/MyBook.db  /run/media/mich/MyBook/backups --levels 3'.split())
->>> args = argparse.Namespace(database='/tmp/MyBook.db',levels=3, use_regexps=False,
+>>> args = argparse.Namespace(database='/tmp/MyBook.db',levels=3, use_regexps=False, ignore_case=False,
 ...                           patterns=['/run/media/mich/MyBook/backups'],limit_output_dirs=0,
 ...                           limit_input_dirs=0)
 >>> mdb.connect(args.database)
@@ -81,12 +81,10 @@ def print_tree(tree, depth=0):
 
 def do_subtree(mdb, args):
     # convert and compile patterns
-    if args.use_regexps:
-        regexps = args.patterns
-    else:
-        regexps = [fnmatch.translate(p) for p in args.patterns]
-    selectors = [re.compile(r.encode()) for r in regexps]
-
+    from cli import regex_compile
+    selectors= regex_compile(args.patterns,
+                             use_regexps=args.use_regexps,
+                             ignore_case=args.ignore_case)
     tree = None
     count = 0
     for d in mdb.load_dirs(args.limit_input_dirs):

@@ -18,12 +18,14 @@ import os
 import re
 
 from binutils import safe_decode
+import cli
 import mlocate
 from dict_of_lists import DictOfLists
 
 LOGGER = logging.getLogger(__name__)
 
 class DirHashStack:
+    # TODO Compare and eventually derive DirHashStack from tree.Tree class
     """
     Maintains a list of contents checksums for each level of ancestor directories.
 
@@ -217,11 +219,9 @@ class App:
     def __init__(self, args):
         self.args = args
         # convert and compile patterns
-        if args.use_regexps:
-            regexps = args.dir_selectors
-        else:
-            regexps = [fnmatch.translate(p) for p in args.dir_selectors]
-        self.selectors = [re.compile(r.encode()) for r in regexps]
+        self.selectors= cli.regex_compile(args.dir_selectors,
+                             use_regexps=args.use_regexps,
+                             ignore_case=args.ignore_case)
 
         self.ds = DirHashStack(self.push_handler, self.pop_handler)
         self.tree = DictOfLists()
@@ -234,7 +234,7 @@ class App:
         >> from cli import main_parser
         >> args = main_parser().parse_args("-d /tmp/MyBook.db -I 100 dups .*[Pp]hotos?/?".split())
         >>> args = argparse.Namespace(database='data/virtualenvs.db', dir_selectors=['/home/mich/.virtualenvs/*'],
-        ...         limit_input_dirs=0, use_regexps=False)
+        ...         limit_input_dirs=0, use_regexps=False, ignore_case=False)
         >>> app = App(args)
         >>> app.run() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
         Reporting Duplicates
@@ -250,28 +250,10 @@ class App:
         mdb.connect(self.args.database)
 
         for d in mdb.load_dirs(self.args.limit_input_dirs):
-            if self.match_path(d.name):
+            if d.match_path(self.selectors):
                 self.process_dir(d)
 
         self.report()
-
-    def match_path(self, name):
-        """
-        >>> args = argparse.Namespace(app_config=False, command='dups', database='/var/lib/mlocate/mlocate.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/\\.virtualenvs/?'], use_regexps=True)
-        >>> app = App(args)
-        >>> app.match_path(b'/home/mich/.virtualenvs')
-        True
-        >>> app.match_path(b'/home/mich/.virtualenvs/py2/share')
-        True
-
-        :param name:
-        :return:
-        """
-        # LOGGER.debug("match_path(%r)", name)
-        for s in self.selectors:
-            if s.match(name):
-                return True
-        return False
 
     def process_dir(self,d):
         """

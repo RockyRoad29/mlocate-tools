@@ -108,7 +108,7 @@ def do_filter(mdb, args):
     >>> mdb.connect("/tmp/MyBook.db")
     >>> args = argparse.Namespace(database='/tmp/MyBook.db',
     ...                           action='list', patterns=['*.ini'],
-    ...                           use_regexps=False,
+    ...                           use_regexps=False, ignore_case=False,
     ...                           limit_input_dirs=10,
     ...                           limit_output_dirs=0,
     ...                           limit_output_match=0)
@@ -117,7 +117,7 @@ def do_filter(mdb, args):
         - desktop.ini
     >>> args = argparse.Namespace(database='/tmp/MyBook.db',
     ...                           action='json', patterns=['*.jpg'],
-    ...                           use_regexps=False,
+    ...                           use_regexps=False, ignore_case=False,
     ...                           limit_input_dirs=100,
     ...                           limit_output_dirs=3,
     ...                           limit_output_match=5)
@@ -169,11 +169,11 @@ def do_filter(mdb, args):
         return
 
     # convert and compile patterns
-    if args.use_regexps:
-        regexps = args.patterns
-    else:
-        regexps = [fnmatch.translate(p) for p in args.patterns]
-    selectors = [re.compile(r.encode()) for r in regexps]
+    from cli import regex_compile
+    selectors= regex_compile(args.patterns,
+                             use_regexps=args.use_regexps,
+                             ignore_case=args.ignore_case)
+
     count = 0
 
     if args.action == 'test':

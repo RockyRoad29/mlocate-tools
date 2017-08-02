@@ -10,8 +10,10 @@ Provides command line arguments parsers and common tools.
 
 """
 import argparse
+import fnmatch
 import logging
 import logging.config
+import re
 
 import binutils
 import mlocate
@@ -32,7 +34,7 @@ def base_parser(**kwargs):
     >>> parser.parse_args('-d /tmp/MyBook.db'.split()) # doctest: +ELLIPSIS
     Namespace(..., database='/tmp/MyBook.db', ...)
     >>> parser.print_help() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-    usage: ... [-h] [-L LOG_LEVEL] [-C] [-n] [-r] [-D] [-d DATABASE]
+    usage: ... [-h] [-L LOG_LEVEL] [-C] [-n] [-r] [-i] [-D] [-d DATABASE]
               [-I LIMIT_INPUT_DIRS]
     <BLANKLINE>
     Test parser
@@ -44,6 +46,8 @@ def base_parser(**kwargs):
       -n, --dry-run         Dry run, don't parse database
       -r, --use-regexps     Patterns are given as regular expressions.
                             Default: False (glob)
+      -i, --ignore-case     Patterns are matched ignoring character case.
+                            Default: False
       -D, --mdb-settings    Print mlocate database settings
       -d DATABASE, --database DATABASE
                             name of the mlocate database
@@ -60,6 +64,9 @@ def base_parser(**kwargs):
     parser.add_argument('-r', '--use-regexps', action='store_true',
                         help="Patterns are given as regular expressions." +
                         " Default: False (glob)")
+    parser.add_argument('-i', '--ignore-case', action='store_true',
+                        help="Patterns are matched ignoring character case." +
+                        " Default: False")
     parser.add_argument('-D', '--mdb-settings', action='store_true',
                         help="Print mlocate database settings")
     parser.add_argument('-d', '--database', default=MLOCATE_DEFAULT_DB,
@@ -80,7 +87,7 @@ def main_parser():
     patterns=['.*\\\\.ini', '.*\\\\.desktop']...)
 
     >>> parser.print_help() # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
-     usage: ... [-h] [-L LOG_LEVEL] [-C] [-n] [-r] [-D] [-d DATABASE]
+     usage: ... [-h] [-L LOG_LEVEL] [-C] [-n] [-r] [-i] [-D] [-d DATABASE]
                         [-I LIMIT_INPUT_DIRS]
                         {find,dups,tree} ...
     <BLANKLINE>
@@ -93,6 +100,8 @@ def main_parser():
       -n, --dry-run         Dry run, don't parse database
       -r, --use-regexps     Patterns are given as regular expressions. Default:
                             False (glob)
+      -i, --ignore-case     Patterns are matched ignoring character case. Default:
+                            False
       -D, --mdb-settings    Print mlocate database settings
       -d DATABASE, --database DATABASE
                             name of the mlocate database
@@ -216,10 +225,13 @@ def add_dups_command(cmds):
     optional arguments:
       -h, --help  show this help message and exit
 
-    >>> parser.parse_args('-r dups /home/mich/\\.virtualenvs/?'.split()) == argparse.Namespace(app_config=False, command='dups', database='/var/lib/mlocate/mlocate.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/\\.virtualenvs/?'], use_regexps=True)
+    >>> parser.parse_args('-r dups /home/mich/\\.virtualenvs/?'.split()) == argparse.Namespace(
+    ... app_config=False, command='dups', database='/var/lib/mlocate/mlocate.db',
+    ... dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False,
+    ... dir_selectors=['/home/mich/\\.virtualenvs/?'], use_regexps=True, ignore_case=False)
     True
     >>> args = parser.parse_args('-d data/virtualenvs.db dups /home/mich/.virtualenvs/*'.split())
-    >>> args == argparse.Namespace(app_config=False, command='dups', database='data/virtualenvs.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/.virtualenvs/*'], use_regexps=False)
+    >>> args == argparse.Namespace(app_config=False, command='dups', database='data/virtualenvs.db', dry_run=False, limit_input_dirs=0, log_level='WARNING', mdb_settings=False, dir_selectors=['/home/mich/.virtualenvs/*'], use_regexps=False, ignore_case=False)
     True
     >>> run(args) # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
     Reporting Duplicates
@@ -230,7 +242,7 @@ def add_dups_command(cmds):
        - /home/mich/.virtualenvs/...
        - /home/mich/.virtualenvs/...
     ...
-    >>> parser.parse_args("-d /tmp/MyBook.db -I 100 dups .*[Pp]hotos?/?".split()) == argparse.Namespace(app_config=False, command='dups', database='/tmp/MyBook.db', dry_run=False, limit_input_dirs=100, log_level='WARNING', mdb_settings=False, dir_selectors=['.*[Pp]hotos?/?'], use_regexps=False)
+    >>> parser.parse_args("-d /tmp/MyBook.db -I 100 dups .*[Pp]hotos?/?".split()) == argparse.Namespace(app_config=False, command='dups', database='/tmp/MyBook.db', dry_run=False, limit_input_dirs=100, log_level='WARNING', mdb_settings=False, dir_selectors=['.*[Pp]hotos?/?'], use_regexps=False, ignore_case=False)
     True
 
     """
@@ -262,7 +274,7 @@ def add_tree_command(cmds):
 
     >>> args = argparse.Namespace(app_config=False, command='tree', database='/tmp/MyBook.db', dry_run=False,
     ...                           patterns=['/run/media/mich/MyBook/Archives'], levels=3, limit_output_dirs=0,
-    ...                           limit_input_dirs=0, log_level='WARNING', mdb_settings=False, use_regexps=True)
+    ...                           limit_input_dirs=0, log_level='WARNING', mdb_settings=False, use_regexps=True, ignore_case=False)
     >>> parser.parse_args('-d /tmp/MyBook.db -r tree /run/media/mich/MyBook/Archives --levels 3'.split()) == args
     True
     >>> run(args) # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
@@ -303,6 +315,7 @@ def print_app_config(args):
     command              : find
     database             : /var/lib/mlocate/mlocate.db
     dry_run              : True
+    ignore_case          : False
     limit_input_dirs     : 0
     limit_output_dirs    : 0
     limit_output_match   : 0
@@ -346,6 +359,23 @@ def print_mdb_settings(mdb):
     for k, value in conf:
         print("    - {0} = {1}".format(k, value))
     print("     ====================================\n\n")
+
+def regex_compile(patterns, use_regexps=False, ignore_case=False, as_bytes=True):
+    # convert and compile patterns
+    if use_regexps:
+        regexps = patterns
+    else:
+        regexps = [fnmatch.translate(p) for p in patterns]
+    if ignore_case:
+        flags = re.IGNORECASE
+    else:
+        flags = 0
+    if as_bytes:
+        code = lambda x: x.encode()
+    else:
+        code = lambda x: x
+
+    return [re.compile(code(r), flags) for r in regexps]
 
 def run(args):
     """
